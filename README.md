@@ -53,13 +53,14 @@ Open [http://localhost:3847/meetings.html](http://localhost:3847/meetings.html) 
 
 ### Deploy live (Render + private GitHub)
 
-See **[DEPLOY.md](DEPLOY.md)** — repo: [github.com/eddieoz-cmyk/chilipiper](https://github.com/eddieoz-cmyk/chilipiper) (private).
+See **[DEPLOY.md](DEPLOY.md)** — GitHub Pages (no Render required).
 
 ```bash
-gh auth login
-./scripts/github-push.sh
-# Then: https://render.com/deploy?repo=https://github.com/eddieoz-cmyk/chilipiper
+# Enable Pages: repo Settings → Pages → Source: GitHub Actions
+git push   # Actions builds and deploys automatically
 ```
+
+Live URL: **https://eddieoz-cmyk.github.io/chilipiper/meetings.html**
 
 
 Copy `.env.example` to `.env` and set your spreadsheet (two tabs: concierge meetings and BDR handoff):

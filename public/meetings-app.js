@@ -964,6 +964,11 @@ function renderMeta(meetingsMeta) {
 }
 
 async function loadRoutingKpi() {
+  if (data?.routingRules?.length) {
+    $("#kpiRouting").textContent = String(data.routingRules.length);
+    $("#kpiRoutingFoot").textContent = "From chilirules.json (static build)";
+    return;
+  }
   try {
     const res = await fetch("/api/routing");
     if (!res.ok) return;
@@ -985,20 +990,43 @@ async function loadRoutingKpi() {
 
 async function loadMeetings(refresh = false) {
   const q = refresh ? "?refresh=1" : "";
-  const [meetingsRes, metaRes] = await Promise.all([
-    fetch(`/api/meetings${q}`),
-    fetch("/api/meetings/meta"),
-  ]);
-  const meetingsMeta = metaRes.ok ? await metaRes.json() : {};
+  let meetingsMeta = {};
 
-  if (!meetingsRes.ok) {
-    const err = await meetingsRes.json().catch(() => ({}));
-    $("#metaLine").textContent = err.error ?? "Failed to load meetings";
-    renderMeta({ ...meetingsMeta, lastError: err.error });
+  try {
+    const [meetingsRes, metaRes] = await Promise.all([
+      fetch(`/api/meetings${q}`),
+      fetch("/api/meetings/meta"),
+    ]);
+    meetingsMeta = metaRes.ok ? await metaRes.json() : {};
+    if (meetingsRes.ok) {
+      data = await meetingsRes.json();
+      applyLoadedData(meetingsMeta);
+      return;
+    }
+  } catch {
+    /* no local server — use static JSON */
+  }
+
+  const cacheBust = refresh ? `?t=${Date.now()}` : "";
+  const res = await fetch(`/meetings-data.json${cacheBust}`);
+  if (!res.ok) {
+    $("#metaLine").textContent = "Failed to load meetings data";
+    renderMeta({ lastError: `HTTP ${res.status}` });
     return;
   }
 
-  data = await meetingsRes.json();
+  data = await res.json();
+  meetingsMeta = { source: "chilipiper", staticSite: true };
+  applyLoadedData(meetingsMeta);
+
+  if (refresh && data?.staticSite) {
+    $("#setupHint").hidden = false;
+    $("#setupHint").textContent =
+      "Static site — push new exports to GitHub to rebuild (Actions → Deploy GitHub Pages).";
+  }
+}
+
+function applyLoadedData(meetingsMeta) {
   filters.dateFrom = data?.filterOptions?.dateFrom ?? "";
   filters.dateTo = data?.filterOptions?.dateTo ?? "";
   filters.repKey = "";
@@ -1010,6 +1038,7 @@ async function loadMeetings(refresh = false) {
   renderFunnel();
   renderAll();
   renderMeta(meetingsMeta);
+  loadRoutingKpi();
 }
 
 function init() {
@@ -1056,7 +1085,6 @@ function init() {
   });
 
   loadMeetings();
-  loadRoutingKpi();
 }
 
 init();

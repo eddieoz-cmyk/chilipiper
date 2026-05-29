@@ -3,5 +3,6 @@ node_modules/
 *.log
 .env
 
-# Generated at server startup — do not commit
+# Generated locally or in CI — do not commit
 public/meetings-data.json
+site/

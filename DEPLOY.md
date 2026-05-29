@@ -1,43 +1,29 @@
-# Deploy meetings dashboard live
+# Deploy meetings dashboard (GitHub Pages)
+
+Host on **GitHub Pages** — no Render or other server needed. The site is static HTML/JS plus a pre-built `meetings-data.json` generated in GitHub Actions from your CSV exports.
 
 ## One-time setup
 
-### 1. GitHub (private repo)
+### 1. Push code (already done)
 
-Repo: **https://github.com/eddieoz-cmyk/chilipiper** (private — contains prospect emails in CSVs)
+Repo: **https://github.com/eddieoz-cmyk/chilipiper** (private)
 
-```bash
-# Install GitHub CLI if needed: https://cli.github.com/
-gh auth login
+### 2. Enable GitHub Pages
 
-./scripts/github-push.sh
-# or explicit URL: ./scripts/github-push.sh https://github.com/eddieoz-cmyk/chilipiper.git
-```
+1. Open **Settings → Pages** on the repo
+2. Under **Build and deployment**, set **Source** to **GitHub Actions**
+3. Push to `main` (or run **Actions → Deploy GitHub Pages → Run workflow**)
 
-This pushes `main` to your existing private repo.
+After the workflow succeeds (~2–3 min), your site is at:
 
-### 2. Render.com
+**https://eddieoz-cmyk.github.io/chilipiper/meetings.html**
 
-**One-click deploy** (sign in with GitHub when prompted):
-
-[Deploy to Render](https://render.com/deploy?repo=https://github.com/eddieoz-cmyk/chilipiper)
-
-Or manually:
-
-1. Sign up at [render.com](https://render.com) and connect your GitHub account.
-2. **New → Blueprint** and open: `https://dashboard.render.com/blueprint/new?repo=https://github.com/eddieoz-cmyk/chilipiper`
-3. Render reads [`render.yaml`](render.yaml) automatically:
-   - Start: `node server.mjs`
-   - Health: `/health`
-   - Env: `CHILIPIPER_DATA_DIR=data/chilipiper`, etc.
-4. Click **Apply** and wait for deploy (~2–3 min on first boot).
-
-Live URL: `https://chilipiper.onrender.com/meetings.html` (or the name Render assigns)
+(Root `/` redirects to `meetings.html`.)
 
 ### 3. Verify
 
-- `https://YOUR-SERVICE.onrender.com/health` → `{"ok":true}`
-- `/meetings.html` → KPIs show ~7,414 calendar meetings (2026)
+- `/meetings.html` — KPIs, filters, report tabs
+- Data loads from `/meetings-data.json` (built in CI from `data/chilipiper/`)
 
 ## Refresh data
 
@@ -48,10 +34,28 @@ git commit -m "Refresh Chili Piper exports"
 git push
 ```
 
-Render redeploys on push. Or click **Refresh** on the dashboard after redeploy.
+GitHub Actions rebuilds and redeploys automatically.
+
+## Local preview (static build)
+
+```bash
+npm run build:site
+npx serve site
+# open http://localhost:3000/meetings.html
+```
+
+## Local dev (with API + Refresh)
+
+```bash
+node server.mjs
+# http://localhost:3847/meetings.html
+```
 
 ## Security
 
-- Repo must stay **private** (prospect emails in CSVs).
-- Render URL is public to anyone with the link — add Render password protection or auth in a follow-up if needed.
-- Never commit `.env` or API tokens.
+- **The published Pages URL is public** — anyone with the link can load `meetings-data.json` (prospect emails). Keep the repo private; understand the **live site is still publicly reachable**.
+- For access control, use GitHub Enterprise Pages restrictions or a different host with auth.
+
+## Render (optional)
+
+[`render.yaml`](render.yaml) remains if you prefer a Node server with live Refresh API later.

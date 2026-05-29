@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "dev": "node server.mjs"
+    "dev": "node server.mjs",
+    "build:site": "node scripts/build-static-site.mjs"
   },
   "description": "MQL user journey dashboard — email, MQL date, return visits, page paths"
 }
