@@ -51,7 +51,15 @@ node server.mjs
 
 Open [http://localhost:3847/meetings.html](http://localhost:3847/meetings.html) for 2026 KPIs.
 
-### Meetings + handoff Google Sheet
+### Deploy live (Render + private GitHub)
+
+See **[DEPLOY.md](DEPLOY.md)** — bundle exports in `data/chilipiper/`, push to a private repo, connect Render.com.
+
+```bash
+gh auth login
+./scripts/github-push.sh
+```
+
 
 Copy `.env.example` to `.env` and set your spreadsheet (two tabs: concierge meetings and BDR handoff):
 
