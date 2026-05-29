@@ -53,11 +53,12 @@ Open [http://localhost:3847/meetings.html](http://localhost:3847/meetings.html) 
 
 ### Deploy live (Render + private GitHub)
 
-See **[DEPLOY.md](DEPLOY.md)** — bundle exports in `data/chilipiper/`, push to a private repo, connect Render.com.
+See **[DEPLOY.md](DEPLOY.md)** — repo: [github.com/eddieoz-cmyk/chilipiper](https://github.com/eddieoz-cmyk/chilipiper) (private).
 
 ```bash
 gh auth login
 ./scripts/github-push.sh
+# Then: https://render.com/deploy?repo=https://github.com/eddieoz-cmyk/chilipiper
 ```
 
 
