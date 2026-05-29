@@ -4,28 +4,30 @@
 
 ### 1. GitHub (private repo)
 
+Repo: **https://github.com/eddieoz-cmyk/chilipiper** (private — contains prospect emails in CSVs)
+
 ```bash
 # Install GitHub CLI if needed: https://cli.github.com/
 gh auth login
 
 ./scripts/github-push.sh
-# optional custom name: ./scripts/github-push.sh my-repo-name
+# or explicit URL: ./scripts/github-push.sh https://github.com/eddieoz-cmyk/chilipiper.git
 ```
 
-This creates a **private** repo and pushes `main`. CSV exports in `data/chilipiper/` are included — keep the repo private.
+This pushes `main` to your existing private repo.
 
 ### 2. Render.com
 
 1. Sign up at [render.com](https://render.com) and connect your GitHub account.
 2. **New → Blueprint** (or **New → Web Service**).
-3. Select the `mql-journey-dashboard` repo.
+3. Select the **eddieoz-cmyk/chilipiper** repo.
 4. Render reads [`render.yaml`](render.yaml) automatically:
    - Start: `node server.mjs`
    - Health: `/health`
    - Env: `CHILIPIPER_DATA_DIR=data/chilipiper`, etc.
 5. Deploy. First boot takes ~2–3 minutes (loads ~7k meetings).
 
-Live URL: `https://mql-journey-dashboard.onrender.com/meetings.html`
+Live URL: `https://chilipiper.onrender.com/meetings.html` (or the name Render assigns)
 
 ### 3. Verify
 

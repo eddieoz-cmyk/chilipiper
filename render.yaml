@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: mql-journey-dashboard
+    name: chilipiper
     runtime: node
     buildCommand: echo "no build"
     startCommand: node server.mjs

@@ -1,31 +1,36 @@
 #!/usr/bin/env bash
-# Create private GitHub repo and push (run once after `gh auth login`).
+# Push to GitHub (private repo: eddieoz-cmyk/chilipiper).
+# Run once after: gh auth login
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-GH="${GH:-gh}"
-if ! command -v "$GH" >/dev/null 2>&1; then
-  echo "Install GitHub CLI: https://cli.github.com/" >&2
-  echo "Or set GH=/path/to/gh" >&2
-  exit 1
-fi
+REPO_URL="${1:-https://github.com/eddieoz-cmyk/chilipiper.git}"
 
-if ! "$GH" auth status >/dev/null 2>&1; then
+GH="${GH:-gh}"
+if command -v "$GH" >/dev/null 2>&1 && "$GH" auth status >/dev/null 2>&1; then
+  echo "GitHub CLI authenticated as: $("$GH" auth status 2>&1 | sed -n 's/.*account //p' | head -1)"
+  # gh sets up git credential helper after login
+elif command -v "$GH" >/dev/null 2>&1; then
   echo "Log in first: gh auth login" >&2
   exit 1
+else
+  echo "Install GitHub CLI (https://cli.github.com/) or push manually:" >&2
+  echo "  git remote add origin $REPO_URL" >&2
+  echo "  git push -u origin main" >&2
+  exit 1
 fi
-
-REPO_NAME="${1:-mql-journey-dashboard}"
 
 if git remote get-url origin >/dev/null 2>&1; then
-  echo "Remote origin already set: $(git remote get-url origin)"
+  git remote set-url origin "$REPO_URL"
 else
-  "$GH" repo create "$REPO_NAME" --private --source=. --remote=origin --description "MQL journey and Chili Piper meetings dashboards"
+  git remote add origin "$REPO_URL"
 fi
 
+echo "Pushing to $REPO_URL ..."
 git push -u origin main
+
 echo ""
-echo "Pushed to: $("$GH" repo view --json url -q .url)"
-echo "Next: connect Render.com → New Web Service → select this repo (render.yaml applies automatically)"
+echo "Done: $REPO_URL"
+echo "Next: Render.com → New → Blueprint → select eddieoz-cmyk/chilipiper"
