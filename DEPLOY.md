@@ -18,14 +18,19 @@ This pushes `main` to your existing private repo.
 
 ### 2. Render.com
 
+**One-click deploy** (sign in with GitHub when prompted):
+
+[Deploy to Render](https://render.com/deploy?repo=https://github.com/eddieoz-cmyk/chilipiper)
+
+Or manually:
+
 1. Sign up at [render.com](https://render.com) and connect your GitHub account.
-2. **New → Blueprint** (or **New → Web Service**).
-3. Select the **eddieoz-cmyk/chilipiper** repo.
-4. Render reads [`render.yaml`](render.yaml) automatically:
+2. **New → Blueprint** and open: `https://dashboard.render.com/blueprint/new?repo=https://github.com/eddieoz-cmyk/chilipiper`
+3. Render reads [`render.yaml`](render.yaml) automatically:
    - Start: `node server.mjs`
    - Health: `/health`
    - Env: `CHILIPIPER_DATA_DIR=data/chilipiper`, etc.
-5. Deploy. First boot takes ~2–3 minutes (loads ~7k meetings).
+4. Click **Apply** and wait for deploy (~2–3 min on first boot).
 
 Live URL: `https://chilipiper.onrender.com/meetings.html` (or the name Render assigns)
 
