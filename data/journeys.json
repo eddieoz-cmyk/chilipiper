@@ -1,0 +1,73 @@
+[
+  {
+    "id": "mql-001",
+    "email": "alex.chen@northwind.io",
+    "mqlDate": "2026-03-15T10:00:00.000Z",
+    "visits": [
+      {
+        "returnedAt": "2026-04-02T14:22:00.000Z",
+        "pages": [
+          { "path": "/", "title": "Home", "viewedAt": "2026-04-02T14:22:05.000Z" },
+          { "path": "/product", "title": "Product Overview", "viewedAt": "2026-04-02T14:23:12.000Z" },
+          { "path": "/pricing", "title": "Pricing", "viewedAt": "2026-04-02T14:25:40.000Z" }
+        ]
+      },
+      {
+        "returnedAt": "2026-04-18T09:10:00.000Z",
+        "pages": [
+          { "path": "/blog/security-best-practices", "title": "Security Best Practices", "viewedAt": "2026-04-18T09:10:08.000Z" },
+          { "path": "/demo", "title": "Book a Demo", "viewedAt": "2026-04-18T09:14:22.000Z" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mql-002",
+    "email": "jordan.lee@acme-corp.com",
+    "mqlDate": "2026-02-28T16:30:00.000Z",
+    "visits": [
+      {
+        "returnedAt": "2026-03-10T11:05:00.000Z",
+        "pages": [
+          { "path": "/pricing", "title": "Pricing", "viewedAt": "2026-03-10T11:05:15.000Z" },
+          { "path": "/compare", "title": "Compare Plans", "viewedAt": "2026-03-10T11:07:02.000Z" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mql-003",
+    "email": "samira.patel@brightlabs.co",
+    "mqlDate": "2026-04-01T08:45:00.000Z",
+    "visits": [
+      {
+        "returnedAt": "2026-04-05T19:30:00.000Z",
+        "pages": [
+          { "path": "/integrations", "title": "Integrations", "viewedAt": "2026-04-05T19:30:10.000Z" },
+          { "path": "/docs/api", "title": "API Docs", "viewedAt": "2026-04-05T19:32:55.000Z" },
+          { "path": "/signup", "title": "Sign Up", "viewedAt": "2026-04-05T19:38:01.000Z" }
+        ]
+      },
+      {
+        "returnedAt": "2026-05-12T13:00:00.000Z",
+        "pages": [
+          { "path": "/", "title": "Home", "viewedAt": "2026-05-12T13:00:04.000Z" },
+          { "path": "/customers", "title": "Customers", "viewedAt": "2026-05-12T13:01:30.000Z" },
+          { "path": "/demo", "title": "Book a Demo", "viewedAt": "2026-05-12T13:03:18.000Z" }
+        ]
+      },
+      {
+        "returnedAt": "2026-05-20T10:15:00.000Z",
+        "pages": [
+          { "path": "/pricing", "title": "Pricing", "viewedAt": "2026-05-20T10:15:22.000Z" }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "mql-004",
+    "email": "morgan.taylor@startup.example",
+    "mqlDate": "2026-05-10T12:00:00.000Z",
+    "visits": []
+  }
+]

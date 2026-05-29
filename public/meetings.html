@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Concierge &amp; Handoff Meetings</title>
+    <link rel="stylesheet" href="/meetings.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header card">
+        <div class="header-top">
+          <div class="header-brand">
+            <span class="logo" aria-hidden="true">◉</span>
+            <div>
+              <h1>Concierge &amp; handoff meetings</h1>
+              <p class="subtitle" id="metaLine">Loading…</p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <a class="nav-dashboard-link" href="/routing.html">Routing rules</a>
+            <a class="nav-dashboard-link" href="/">MQL journeys</a>
+            <a class="source-link" id="sheetLink" href="#" target="_blank" rel="noopener noreferrer" hidden
+              >Google Sheet</a
+            >
+            <button type="button" class="btn-refresh" id="refreshBtn">Refresh</button>
+          </div>
+        </div>
+
+        <div class="kpi-row" id="kpiRow">
+          <div class="kpi-card accent">
+            <span class="kpi-label">Calendar meetings</span>
+            <span class="kpi-value" id="kpiCalendarTotal">—</span>
+            <span class="kpi-foot" id="kpiCalendarFoot">From meetings.csv</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Concierge on calendar</span>
+            <span class="kpi-value" id="kpiConciergeCalendar">—</span>
+            <span class="kpi-foot" id="kpiConciergeCalendarFoot">MEETING_SOURCE_TYPE = Concierge</span>
+          </div>
+          <div class="kpi-card success">
+            <span class="kpi-label">Meetings held</span>
+            <span class="kpi-value" id="kpiHappened">—</span>
+            <span class="kpi-foot" id="kpiHappenedFoot">Not canceled / no-show</span>
+          </div>
+          <div class="kpi-card warning">
+            <span class="kpi-label">Handoff on calendar</span>
+            <span class="kpi-value" id="kpiHandoff">—</span>
+            <span class="kpi-foot" id="kpiHandoffFoot">MEETING_SOURCE_TYPE = Handoff</span>
+          </div>
+          <div class="kpi-card danger">
+            <span class="kpi-label">Canceled</span>
+            <span class="kpi-value" id="kpiCanceled">—</span>
+            <span class="kpi-foot" id="kpiCanceledFoot">From meetings.csv status</span>
+          </div>
+          <div class="kpi-card muted">
+            <span class="kpi-label">Chili Piper rules</span>
+            <span class="kpi-value" id="kpiRouting">—</span>
+            <span class="kpi-foot" id="kpiRoutingFoot">Live routing from API</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="filters card" aria-label="Filters">
+        <div class="filters-head">
+          <h2 class="section-title">Filters</h2>
+          <button type="button" class="btn-clear-filters" id="clearFiltersBtn" hidden>Clear all</button>
+        </div>
+        <div class="filters-grid">
+          <label class="filter-field">
+            <span>From</span>
+            <input type="date" id="filterDateFrom" />
+          </label>
+          <label class="filter-field">
+            <span>To</span>
+            <input type="date" id="filterDateTo" />
+          </label>
+          <label class="filter-field">
+            <span>Date uses</span>
+            <select id="filterDateField">
+              <option value="meetingAt">Meeting date</option>
+              <option value="bookedAt">Booked date</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span>Meeting type</span>
+            <select id="filterMeetingType">
+              <option value="">All types</option>
+              <option value="concierge">Concierge (live)</option>
+              <option value="chilical">ChiliCal (direct link)</option>
+              <option value="handoff">Handoff (BDR → AE)</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span>Region</span>
+            <select id="filterRegion">
+              <option value="">All regions</option>
+            </select>
+          </label>
+          <label class="filter-field filter-field-wide">
+            <span>Rep</span>
+            <select id="filterRep">
+              <option value="">All reps</option>
+            </select>
+          </label>
+          <label class="filter-field filter-field-wide">
+            <span>Routing rule</span>
+            <select id="filterRoutingRule">
+              <option value="">All routing rules</option>
+            </select>
+          </label>
+        </div>
+        <p class="filter-summary" id="filterSummary" hidden></p>
+        <p class="panel-hint" id="funnelFilterNote" hidden>
+          Website concierge funnel below uses concierge.csv for the full export year. Chart, KPIs, and table use
+          meetings.csv unless noted.
+        </p>
+      </section>
+
+      <section class="data-sources card" id="dataSourcesSection" hidden aria-labelledby="dataSourcesHeading">
+        <h2 id="dataSourcesHeading" class="section-title">Two exports — don’t mix the counts</h2>
+        <div class="data-sources-grid" id="dataSourcesGrid"></div>
+      </section>
+
+      <section class="chart-panel card" aria-labelledby="periodChartHeading">
+        <div class="chart-head">
+          <div>
+            <h2 id="periodChartHeading" class="section-title">Calendar meetings over time</h2>
+            <p class="chart-subtitle" id="chartSubtitle">—</p>
+          </div>
+          <label class="filter-field chart-granularity">
+            <span>Group by</span>
+            <select id="chartGranularity">
+              <option value="auto">Auto</option>
+              <option value="day">Daily</option>
+              <option value="week">Weekly</option>
+              <option value="month">Monthly</option>
+            </select>
+          </label>
+        </div>
+        <div class="chart-legend" id="chartLegend" aria-hidden="true">
+          <span class="legend-item"><i class="swatch concierge"></i> Concierge</span>
+          <span class="legend-item"><i class="swatch handoff"></i> Handoff</span>
+          <span class="legend-item"><i class="swatch chilical"></i> ChiliCal</span>
+          <span class="legend-item"><i class="swatch other"></i> Other</span>
+        </div>
+        <p class="panel-hint chart-type-hint">
+          <strong>ChiliCal</strong> = booked via a rep’s Chili Piper calendar (not Concierge live or BDR handoff).
+        </p>
+        <div class="chart-wrap" id="chartWrap">
+          <svg
+            id="periodChart"
+            class="period-chart"
+            viewBox="0 0 800 280"
+            preserveAspectRatio="xMidYMid meet"
+            role="img"
+            aria-labelledby="periodChartHeading chartSubtitle"
+          ></svg>
+          <p class="empty-state" id="chartEmpty" hidden>No meetings in this period.</p>
+        </div>
+      </section>
+
+      <section class="rule-assignees card" id="ruleAssigneeSection" hidden aria-labelledby="ruleAssigneeHeading">
+        <h2 id="ruleAssigneeHeading" class="section-title">Meetings by rep</h2>
+        <p class="chart-subtitle" id="ruleAssigneeSubtitle">—</p>
+        <div class="table-wrap">
+          <table class="assignee-table">
+            <thead>
+              <tr>
+                <th>Rep</th>
+                <th>Email</th>
+                <th>Total</th>
+                <th>Concierge</th>
+                <th>ChiliCal</th>
+                <th>Handoff</th>
+                <th>Held</th>
+              </tr>
+            </thead>
+            <tbody id="ruleAssigneeBody"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="ruleAssigneeEmpty" hidden>No meetings for this rule in the selected period.</p>
+      </section>
+
+      <nav class="tabs card" role="tablist" aria-label="Meeting views">
+        <button type="button" role="tab" class="tab active" data-tab="all" id="tabAll" aria-selected="true">
+          All
+          <span class="tab-badge" id="badgeAll">—</span>
+        </button>
+        <button type="button" role="tab" class="tab" data-tab="live" id="tabLive" aria-selected="false">
+          Live booked
+          <span class="tab-badge" id="badgeLive">—</span>
+        </button>
+        <button type="button" role="tab" class="tab" data-tab="bdr" id="tabBdr" aria-selected="false">
+          BDR by rule
+          <span class="tab-badge" id="badgeBdr">—</span>
+        </button>
+        <button type="button" role="tab" class="tab" data-tab="outcomes" id="tabOutcomes" aria-selected="false">
+          Outcomes
+          <span class="tab-badge" id="badgeOutcomes">—</span>
+        </button>
+        <button type="button" role="tab" class="tab" data-tab="handoffs" id="tabHandoffs" aria-selected="false">
+          Handoffs
+          <span class="tab-badge" id="badgeHandoffs">—</span>
+        </button>
+        <button type="button" role="tab" class="tab" data-tab="concierge" id="tabConcierge" aria-selected="false">
+          Concierge
+          <span class="tab-badge" id="badgeConcierge">—</span>
+        </button>
+        <button type="button" role="tab" class="tab" data-tab="handoff" id="tabHandoff" aria-selected="false">
+          Handoff list
+          <span class="tab-badge" id="badgeHandoff">—</span>
+        </button>
+      </nav>
+
+      <section class="report-panel card" id="liveReportPanel" hidden aria-labelledby="liveReportHeading">
+        <h2 id="liveReportHeading" class="section-title">Live booked meetings (Concierge)</h2>
+        <p class="chart-subtitle" id="liveReportSubtitle">—</p>
+        <p class="panel-hint">
+          Counts from <code>meetings.csv</code> where <code>MEETING_SOURCE_TYPE = Concierge</code>, enriched with
+          region and routing rule from <code>concierge.csv</code> via <code>MEETING_ID</code>.
+        </p>
+        <div class="report-grid">
+          <article class="report-block">
+            <h3>By date</h3>
+            <div class="table-wrap report-table-wrap">
+              <table class="assignee-table compact-table">
+                <thead><tr><th>Date</th><th>Meetings</th></tr></thead>
+                <tbody id="liveByDateBody"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="report-block">
+            <h3>By region</h3>
+            <div class="table-wrap report-table-wrap">
+              <table class="assignee-table compact-table">
+                <thead><tr><th>Region</th><th>Meetings</th></tr></thead>
+                <tbody id="liveByRegionBody"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="report-block report-block-wide">
+            <h3>By routing rule</h3>
+            <div class="table-wrap report-table-wrap">
+              <table class="assignee-table compact-table">
+                <thead><tr><th>Rule</th><th>Region</th><th>Meetings</th></tr></thead>
+                <tbody id="liveByRuleBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="report-panel card" id="bdrReportPanel" hidden aria-labelledby="bdrReportHeading">
+        <h2 id="bdrReportHeading" class="section-title">Routing rule → BDR distribution</h2>
+        <p class="chart-subtitle" id="bdrReportSubtitle">—</p>
+        <p class="panel-hint">
+          For each routing rule, meetings assigned to each BDR (from website log assignee or handoff booker). One row
+          per calendar meeting — no double counting.
+        </p>
+        <div id="bdrRuleBlocks"></div>
+        <p class="empty-state" id="bdrReportEmpty" hidden>No meetings with a routing rule in this filter.</p>
+      </section>
+
+      <section class="report-panel card" id="outcomesReportPanel" hidden aria-labelledby="outcomesReportHeading">
+        <h2 id="outcomesReportHeading" class="section-title">Meeting outcomes</h2>
+        <p class="chart-subtitle" id="outcomesReportSubtitle">—</p>
+        <p class="panel-hint">Source of truth: <code>meetings.csv</code> status fields.</p>
+        <div class="outcome-bars" id="outcomeBars"></div>
+        <div class="breakdown-grid" id="outcomeGrid"></div>
+      </section>
+
+      <section class="report-panel card" id="handoffsReportPanel" hidden aria-labelledby="handoffsReportHeading">
+        <h2 id="handoffsReportHeading" class="section-title">Handoff meetings (BDR → AE)</h2>
+        <p class="chart-subtitle" id="handoffsReportSubtitle">—</p>
+        <p class="panel-hint">
+          <code>MEETING_SOURCE_TYPE = Handoff</code> in meetings.csv. Prior website routing from
+          <code>concierge.csv</code> when guest email matches.
+        </p>
+        <div class="handoff-summary" id="handoffSummary"></div>
+        <h3 class="subsection-title">By BDR → AE pair</h3>
+        <div class="table-wrap">
+          <table class="assignee-table">
+            <thead>
+              <tr>
+                <th>BDR</th>
+                <th>AE</th>
+                <th>Total</th>
+                <th>Held</th>
+                <th>Canceled</th>
+                <th>From router</th>
+                <th>From ownership</th>
+                <th>No site log</th>
+              </tr>
+            </thead>
+            <tbody id="handoffPairsBody"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="handoffPairsEmpty" hidden>No handoff meetings match filters.</p>
+      </section>
+
+      <section class="distribution-panel card" id="distributionPanel" hidden aria-labelledby="distributionHeading">
+        <h2 id="distributionHeading" class="section-title">Handoff distribution by AE</h2>
+        <p class="chart-subtitle" id="distributionSubtitle">—</p>
+        <p class="panel-hint">
+          Links each handoff guest (<code>PRIMARY_GUEST_EMAIL</code>) to their latest prior row in
+          <code>concierge.csv</code> by <code>GUEST_EMAIL</code>, then classifies
+          <code>MATCHED_ROUTE_ID</code> as geographic router vs ownership queue.
+        </p>
+        <div class="distribution-totals" id="distributionTotals"></div>
+        <div class="table-wrap">
+          <table class="assignee-table distribution-table">
+            <thead>
+              <tr>
+                <th>AE (host)</th>
+                <th>Email</th>
+                <th>Total handoffs</th>
+                <th>From router</th>
+                <th>From ownership</th>
+                <th>No website log</th>
+                <th>Held</th>
+              </tr>
+            </thead>
+            <tbody id="distributionBody"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="distributionEmpty" hidden>No handoff meetings match filters.</p>
+      </section>
+
+      <section class="breakdown card" id="funnelSection" hidden aria-labelledby="funnelHeading">
+        <h2 id="funnelHeading" class="section-title">Website concierge funnel (<span id="funnelYear">2026</span>)</h2>
+        <p class="panel-hint">
+          From <code>concierge.csv</code> — visitors booking (or not) on the site. Not the same as
+          <code>meetings.csv</code>.
+        </p>
+        <div class="breakdown-grid" id="funnelGrid"></div>
+      </section>
+
+      <section class="breakdown card" aria-labelledby="breakdownHeading">
+        <h2 id="breakdownHeading" class="section-title">Calendar meetings by type (meetings.csv)</h2>
+        <div class="breakdown-grid" id="breakdownGrid"></div>
+      </section>
+
+      <section class="table-section card">
+        <div class="table-head">
+          <h2 class="section-title">Calendar meetings (meetings.csv)</h2>
+          <label class="filter-check">
+            <input type="checkbox" id="onlyHeld" />
+            Only meetings held
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table class="meetings-table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Email</th>
+                <th>Company</th>
+                <th>Region</th>
+                <th>Routing rule</th>
+                <th>Prior site rule</th>
+                <th>Route via</th>
+                <th>Assigned to</th>
+                <th>Status</th>
+                <th>Live</th>
+                <th>Held</th>
+                <th>Handoff</th>
+                <th>BDR</th>
+                <th>AE</th>
+              </tr>
+            </thead>
+            <tbody id="meetingsBody"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="emptyState" hidden>No rows match this filter.</p>
+      </section>
+
+      <p class="setup-hint" id="setupHint" hidden></p>
+    </div>
+    <script type="module" src="/meetings-app.js"></script>
+  </body>
+</html>

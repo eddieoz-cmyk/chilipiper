@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MQL User Journey Dashboard</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header card">
+        <div class="header-top">
+          <div class="header-brand">
+            <span class="logo" aria-hidden="true">M</span>
+            <div>
+              <h1>MQL User Journeys</h1>
+              <p class="subtitle">Post-MQL return traffic · lead intelligence · outreach queue</p>
+            </div>
+          </div>
+          <a class="nav-dashboard-link" href="/meetings.html">Meetings</a>
+          <a class="nav-dashboard-link" href="/routing.html">Routing rules</a>
+        </div>
+        <div class="kpi-row" id="headerStats" hidden>
+          <div class="kpi-card">
+            <span class="kpi-label">Total MQLs</span>
+            <span class="kpi-value" id="statMqls">—</span>
+            <span class="kpi-foot">With return visit data</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Return visits</span>
+            <span class="kpi-value" id="statReturns">—</span>
+            <span class="kpi-foot">Post-MQL sessions</span>
+          </div>
+        </div>
+      </header>
+
+      <main class="layout">
+        <aside class="sidebar card">
+          <div class="page-filter-banner" id="pageFilterBanner" hidden>
+            <span id="pageFilterLabel"></span>
+            <button type="button" class="page-filter-clear" id="pageFilterClear">
+              Clear
+            </button>
+          </div>
+          <label class="search-wrap">
+            <span class="sr-only">Search by email</span>
+            <input
+              type="search"
+              id="search"
+              placeholder="Search email…"
+              autocomplete="off"
+            />
+          </label>
+          <ul class="mql-list" id="mqlList" role="listbox" aria-label="MQL leads"></ul>
+        </aside>
+
+        <div class="center-column">
+          <aside class="insight-panel center-top-pages card" aria-labelledby="topPagesHeading">
+            <div class="panel-head">
+              <h2 id="topPagesHeading" class="panel-title">Most visited pages</h2>
+              <p class="panel-hint">Click a count to filter MQLs</p>
+            </div>
+            <ol class="insight-list rank-list" id="topPagesList"></ol>
+          </aside>
+
+          <section class="detail card" id="detail" aria-live="polite">
+            <div class="detail-content" id="detailContent" hidden>
+              <div class="detail-header">
+                <div>
+                  <h2 id="detailEmail"></h2>
+                  <p class="detail-meta">
+                    <span>MQL date: <strong id="detailMqlDate"></strong></span>
+                    <span class="dot">·</span>
+                    <span id="detailReturnSummary"></span>
+                  </p>
+                  <dl class="mql-meta-grid" id="detailMetaGrid"></dl>
+                </div>
+              </div>
+              <div class="timeline" id="timeline"></div>
+            </div>
+            <p class="detail-placeholder" id="detailPlaceholder">
+              Select an MQL from the list to view their journey
+            </p>
+          </section>
+        </div>
+
+        <div class="insights-column">
+          <aside class="insight-panel outreach-panel card" aria-labelledby="outreachHeading">
+            <div class="panel-head">
+              <h2 id="outreachHeading" class="panel-title">Immediate outreach</h2>
+              <p class="panel-hint" id="outreachSummary">Analyst priority queue</p>
+            </div>
+            <details class="assumptions-details">
+              <summary>Analyst assumptions</summary>
+              <ul class="assumptions-list" id="assumptionsList"></ul>
+            </details>
+            <button type="button" class="outreach-filter-all" id="outreachFilterAll" hidden>
+              Show all in list
+            </button>
+            <ol class="insight-list outreach-list" id="outreachList"></ol>
+          </aside>
+          <aside class="insight-panel card" aria-labelledby="leadStatusHeading">
+            <div class="panel-head">
+              <h2 id="leadStatusHeading" class="panel-title">Lead status</h2>
+              <p class="panel-hint">Click a count to filter MQLs</p>
+            </div>
+            <ol class="insight-list rank-list" id="leadStatusList"></ol>
+          </aside>
+          <aside class="insight-panel card" aria-labelledby="combinedScoreHeading">
+            <div class="panel-head">
+              <h2 id="combinedScoreHeading" class="panel-title">Combined score</h2>
+              <p class="panel-hint">Last combined score · A→D</p>
+            </div>
+            <ol class="insight-list rank-list" id="combinedScoreList"></ol>
+          </aside>
+          <aside class="insight-panel card" aria-labelledby="segmentHeading">
+            <div class="panel-head">
+              <h2 id="segmentHeading" class="panel-title">Segment</h2>
+              <p class="panel-hint">Main segment</p>
+            </div>
+            <ol class="insight-list rank-list" id="segmentList"></ol>
+          </aside>
+          <aside class="insight-panel card" aria-labelledby="ownerHeading">
+            <div class="panel-head">
+              <h2 id="ownerHeading" class="panel-title">Owner</h2>
+              <p class="panel-hint">Main owner name</p>
+            </div>
+            <ol class="insight-list rank-list" id="ownerList"></ol>
+          </aside>
+        </div>
+      </main>
+    </div>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

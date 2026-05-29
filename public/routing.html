@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Routing Rules Dashboard</title>
+    <link rel="stylesheet" href="/routing.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="header-brand">
+          <span class="logo" aria-hidden="true">⇄</span>
+          <div>
+            <h1>Sales routing rules</h1>
+            <p class="subtitle" id="metaLine">Loading…</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <a class="nav-dashboard-link" href="/meetings.html">Meetings</a>
+          <a class="nav-dashboard-link" href="/">MQL journeys</a>
+          <a class="source-link" id="sourceLink" href="#" target="_blank" rel="noopener noreferrer" hidden
+            >Data source</a
+          >
+          <button type="button" class="btn-refresh" id="refreshBtn" hidden>
+            Refresh data
+          </button>
+        </div>
+      </header>
+
+      <nav class="tabs" role="tablist" aria-label="Routing views">
+        <button
+          type="button"
+          role="tab"
+          id="tabConcierge"
+          aria-selected="true"
+          aria-controls="panelConcierge"
+          class="tab active"
+          data-tab="concierge"
+        >
+          Concierge
+          <span class="tab-badge" id="badgeConcierge">—</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="tabOffline"
+          aria-selected="false"
+          aria-controls="panelOffline"
+          class="tab"
+          data-tab="offline"
+        >
+          Offline distribution
+          <span class="tab-badge" id="badgeOffline">—</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="tabGaps"
+          aria-selected="false"
+          aria-controls="panelGaps"
+          class="tab"
+          data-tab="gaps"
+        >
+          Coverage gaps
+          <span class="tab-badge" id="badgeGaps">—</span>
+        </button>
+      </nav>
+
+      <div class="toolbar">
+        <label class="filter-select-wrap filter-select-wrap--region">
+          <span class="filter-label">Region</span>
+          <select id="regionFilter"></select>
+        </label>
+        <label class="filter-select-wrap" id="statusFilterWrap">
+          <span class="filter-label">Rule status</span>
+          <select id="statusFilter">
+            <option value="">All statuses</option>
+          </select>
+        </label>
+      </div>
+
+      <section
+        id="panelConcierge"
+        role="tabpanel"
+        aria-labelledby="tabConcierge"
+        class="panel"
+      >
+        <p class="panel-desc">
+          Live booking from the website — rules where the module includes
+          <strong>Concierge</strong> (Chili Piper).
+        </p>
+        <div class="table-wrap">
+          <table class="rules-table" id="conciergeTable">
+            <thead>
+              <tr>
+                <th>Rule</th>
+                <th>Status</th>
+                <th>Region</th>
+                <th>State</th>
+                <th>Size</th>
+                <th>Segment</th>
+                <th>Team</th>
+                <th>Reps</th>
+                <th>Countries</th>
+              </tr>
+            </thead>
+            <tbody id="conciergeBody"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="conciergeEmpty" hidden>No rules match your filters.</p>
+      </section>
+
+      <section
+        id="panelOffline"
+        role="tabpanel"
+        aria-labelledby="tabOffline"
+        class="panel"
+        hidden
+      >
+        <p class="panel-desc">
+          Offline distribution — POD mapping, BDRs, and account executives by
+          region and segment.
+        </p>
+        <div class="table-wrap">
+          <table class="rules-table offline-table" id="offlineTable">
+            <thead>
+              <tr>
+                <th>Region</th>
+                <th>Focus</th>
+                <th>Mapping</th>
+                <th>Segment</th>
+                <th>Pod</th>
+                <th>Chili Piper rule</th>
+                <th>Segment rules</th>
+                <th>BDRs</th>
+                <th>Sales reps</th>
+                <th>Notes</th>
+              </tr>
+            </thead>
+            <tbody id="offlineBody"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="offlineEmpty" hidden>No pods match your filters.</p>
+      </section>
+
+      <section
+        id="panelGaps"
+        role="tabpanel"
+        aria-labelledby="tabGaps"
+        class="panel"
+        hidden
+      >
+        <p class="panel-desc" id="gapsDesc">
+          Compared against every country in the world (and US states / Canadian
+          provinces where relevant). Listed here if they do
+          <strong>not</strong> appear in any routing rule for the selected region.
+        </p>
+        <p class="gaps-meta" id="gapsMeta"></p>
+        <div class="gaps-grid">
+          <article class="gaps-card">
+            <h3 class="gaps-card-title">
+              Countries / territories not in rules
+              <span class="gaps-count" id="gapsCountryCount">0</span>
+            </h3>
+            <ul class="gaps-list" id="gapsCountries"></ul>
+            <p class="gaps-empty" id="gapsCountriesEmpty" hidden>
+              All countries in scope are covered by a live rule.
+            </p>
+          </article>
+          <article class="gaps-card" id="gapsStatesCard">
+            <h3 class="gaps-card-title">
+              <span id="gapsStatesTitle">States / provinces not in rules</span>
+              <span class="gaps-count" id="gapsStateCount">0</span>
+            </h3>
+            <ul class="gaps-list" id="gapsStates"></ul>
+            <p class="gaps-empty" id="gapsStatesEmpty" hidden>
+              All states in scope are covered by a live rule.
+            </p>
+          </article>
+        </div>
+      </section>
+    </div>
+    <script src="/routing-app.js" type="module"></script>
+  </body>
+</html>

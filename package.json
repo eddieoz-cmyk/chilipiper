@@ -1,0 +1,11 @@
+{
+  "name": "mql-journey-dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node server.mjs"
+  },
+  "description": "MQL user journey dashboard — email, MQL date, return visits, page paths"
+}

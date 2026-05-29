@@ -1,0 +1,7 @@
+node_modules/
+.DS_Store
+*.log
+.env
+
+# Generated at server startup — do not commit
+public/meetings-data.json
