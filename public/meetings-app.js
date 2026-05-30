@@ -190,7 +190,7 @@ function populateFilterControls() {
     `<option value="">All reps</option>` +
     (opts.reps ?? [])
       .map((r) => {
-        const label = r.name && r.email ? `${r.name} (${r.email})` : r.name || r.email || r.key;
+        const label = r.name ?? r.key.replace(/^id:|^email:/, "");
         return `<option value="${escapeHtml(r.key)}">${escapeHtml(label)}</option>`;
       })
       .join("");
@@ -448,8 +448,7 @@ function repKeyForMeeting(m) {
 function repDisplayForMeeting(m) {
   const person = m.assignedUser ?? m.hostUser;
   return {
-    name: person?.name ?? person?.email ?? m.ae ?? "Unknown",
-    email: person?.email ?? m.ae ?? null,
+    name: person?.name ?? "Unknown",
   };
 }
 
@@ -468,7 +467,7 @@ function renderRuleAssigneeBreakdown() {
   section.hidden = false;
   $("#ruleAssigneeHeading").textContent = "Meetings by rep";
   $("#ruleAssigneeSubtitle").textContent = rule?.name
-    ? `${rows.length.toLocaleString()} calendar meetings (meetings.csv) on rule: ${rule.name}. Reps from website log when MEETING_ID matches.`
+    ? `${rows.length.toLocaleString()} meetings (Meeting_new.csv) on rule: ${rule.name}.`
     : `${rows.length.toLocaleString()} calendar meetings for selected rule`;
 
   const byRep = new Map();
@@ -478,7 +477,6 @@ function renderRuleAssigneeBreakdown() {
       const rep = repDisplayForMeeting(m);
       byRep.set(key, {
         name: rep.name,
-        email: rep.email,
         total: 0,
         concierge: 0,
         chilical: 0,
@@ -501,7 +499,6 @@ function renderRuleAssigneeBreakdown() {
       (r) => `
     <tr>
       <td>${escapeHtml(r.name)}</td>
-      <td class="email">${escapeHtml(r.email) || "—"}</td>
       <td class="num">${r.total}</td>
       <td class="num">${r.concierge}</td>
       <td class="num">${r.chilical}</td>
@@ -525,36 +522,35 @@ function renderDataSources() {
   section.hidden = false;
 
   const cal = data.dataSources?.calendar;
-  const web = data.dataSources?.website;
   const f = data.funnel?.conciergeLog;
 
   $("#dataSourcesGrid").innerHTML = `
     <article class="source-card">
-      <h3>${escapeHtml(cal?.label ?? "Calendar")} · <code>meetings.csv</code></h3>
+      <h3>${escapeHtml(cal?.label ?? "Meetings")} · <code>Meeting_new.csv</code></h3>
       <p>${escapeHtml(cal?.description ?? "")}</p>
       <dl class="source-stats">
         <div><dt>Rows (${data.meta?.year ?? ""})</dt><dd>${linkage.calendarMeetings.toLocaleString()}</dd></div>
-        <div><dt>Concierge source</dt><dd>${linkage.conciergeOnCalendar.toLocaleString()}</dd></div>
-        <div><dt>Handoff source</dt><dd>${linkage.handoffOnCalendar.toLocaleString()}</dd></div>
-        <div><dt>ChiliCal source</dt><dd>${linkage.chilicalOnCalendar.toLocaleString()}</dd></div>
-        <div><dt>With website log</dt><dd>${linkage.calendarWithWebsiteLog.toLocaleString()}</dd></div>
-        <div><dt>Calendar only</dt><dd>${linkage.calendarWithoutWebsiteLog.toLocaleString()}</dd></div>
+        <div><dt>Concierge</dt><dd>${linkage.conciergeOnCalendar.toLocaleString()}</dd></div>
+        <div><dt>Handoff</dt><dd>${linkage.handoffOnCalendar.toLocaleString()}</dd></div>
+        <div><dt>ChiliCal</dt><dd>${linkage.chilicalOnCalendar.toLocaleString()}</dd></div>
+        <div><dt>With routing rule</dt><dd>${(linkage.calendarWithRouting ?? 0).toLocaleString()}</dd></div>
       </dl>
     </article>
     <article class="source-card">
-      <h3>${escapeHtml(web?.label ?? "Website")} · <code>concierge.csv</code></h3>
-      <p>${escapeHtml(web?.description ?? "")}</p>
+      <h3>Concierge funnel · <code>Meeting_new.csv</code></h3>
+      <p>Concierge rows only — live bookings from the unified export.</p>
       <dl class="source-stats">
-        <div><dt>Sessions (${f?.year ?? ""})</dt><dd>${linkage.websiteSessionsTotal.toLocaleString()}</dd></div>
-        <div><dt>Scheduled on site</dt><dd>${linkage.websiteSessionsScheduled.toLocaleString()}</dd></div>
+        <div><dt>Concierge rows (${f?.year ?? ""})</dt><dd>${linkage.websiteSessionsTotal.toLocaleString()}</dd></div>
+        <div><dt>Scheduled (offer result)</dt><dd>${linkage.websiteSessionsScheduled.toLocaleString()}</dd></div>
         <div><dt>Meeting offered</dt><dd>${linkage.websiteSessionsOffered.toLocaleString()}</dd></div>
-        <div><dt>Same MEETING_ID as calendar</dt><dd>${linkage.websiteScheduledLinkedToCalendar.toLocaleString()}</dd></div>
+        <div><dt>Active</dt><dd>${(f?.byStatus?.Active ?? 0).toLocaleString()}</dd></div>
+        <div><dt>Canceled</dt><dd>${(f?.byStatus?.Canceled ?? 0).toLocaleString()}</dd></div>
       </dl>
     </article>
     <p class="linkage-note">
-      <strong>Why numbers differ:</strong> many website sessions never become a calendar row (disqualified, timeout, cancel).
-      Handoff and ChiliCal meetings are booked in Chili Piper but usually have no row in <code>concierge.csv</code>.
-      Routing rule + rep on the table come from the website log when <code>MEETING_ID</code> matches.
+      <strong>Single export:</strong> <code>Meeting_new.csv</code> replaces the old separate
+      <code>meetings.csv</code> and <code>concierge.csv</code> files. Routing and assignment come from
+      <code>MATCHED_ROUTE_ID</code> and <code>PRIMARY_ASSIGNED_USER_ID</code> on each row.
     </p>
   `;
 }
@@ -609,7 +605,7 @@ function renderBdrReport(reports) {
       const rows = rule.bdrs
         .map(
           (b) =>
-            `<tr><td>${escapeHtml(b.name)}</td><td class="email">${escapeHtml(b.email) || "—"}</td><td class="num">${b.count}</td></tr>`,
+            `<tr><td>${escapeHtml(b.name)}</td><td class="num">${b.count}</td></tr>`,
         )
         .join("");
       return `
@@ -617,7 +613,7 @@ function renderBdrReport(reports) {
           <h3>${escapeHtml(rule.ruleName)} <span class="rule-meta">${escapeHtml(rule.region) || ""} · ${rule.total} meetings</span></h3>
           <div class="table-wrap">
             <table class="assignee-table compact-table">
-              <thead><tr><th>BDR / assignee</th><th>Email</th><th>Meetings</th></tr></thead>
+              <thead><tr><th>BDR / assignee</th><th>Meetings</th></tr></thead>
               <tbody>${rows}</tbody>
             </table>
           </div>
@@ -689,8 +685,8 @@ function renderHandoffsReport(reports) {
     .map(
       (p) => `
     <tr>
-      <td>${escapeHtml(p.bdrName)}<br><span class="person-email">${escapeHtml(p.bdrEmail) || ""}</span></td>
-      <td>${escapeHtml(p.aeName)}<br><span class="person-email">${escapeHtml(p.aeEmail) || ""}</span></td>
+      <td>${escapeHtml(p.bdrName)}</td>
+      <td>${escapeHtml(p.aeName)}</td>
       <td class="num">${p.total}</td>
       <td class="num">${p.happened}</td>
       <td class="num">${p.canceled}</td>
@@ -751,22 +747,22 @@ function renderKpis() {
     : "MEETING_STATUS / EXTENDED = Canceled";
 
   if (filtered) {
-    $("#kpiCalendarFoot").textContent = "Filtered rows from meetings.csv";
+    $("#kpiCalendarFoot").textContent = "Filtered rows from Meeting_new.csv";
     $("#kpiConciergeCalendarFoot").textContent = `${m.byType.concierge.total} of ${m.total} filtered calendar`;
   } else if (linkage) {
-    $("#kpiCalendarFoot").textContent = `${linkage.websiteSessionsScheduled.toLocaleString()} scheduled on site (concierge.csv)`;
+    $("#kpiCalendarFoot").textContent = `${linkage.websiteSessionsScheduled.toLocaleString()} Concierge scheduled (Meeting_new.csv)`;
     $("#kpiConciergeCalendarFoot").textContent = `${linkage.calendarWithWebsiteLog.toLocaleString()} also in website log`;
   } else {
-    $("#kpiCalendarFoot").textContent = "All rows in meetings.csv";
+    $("#kpiCalendarFoot").textContent = "All rows in Meeting_new.csv";
     $("#kpiConciergeCalendarFoot").textContent = "MEETING_SOURCE_TYPE = Concierge";
   }
 
   $("#kpiHappenedFoot").textContent = filtered
     ? `${formatRate(m.rates.happenedOfBookedLive)} of filtered Concierge on calendar`
-    : "Not canceled / no-show (meetings.csv)";
+    : "Not canceled / no-show (Meeting_new.csv)";
   $("#kpiHandoffFoot").textContent = filtered
     ? `${formatRate(m.byType.handoff.rates.handoffOfTotal)} of filtered calendar`
-    : "BDR handoff bookings in meetings.csv";
+    : "BDR handoff bookings in Meeting_new.csv";
 
   $("#badgeAll").textContent = String(m.total);
   $("#badgeConcierge").textContent = String(m.byType.concierge.total);
@@ -859,14 +855,9 @@ function pill(yes) {
   return `<span class="pill ${cls}">${label}</span>`;
 }
 
-function formatPerson(user, fallbackEmail) {
-  if (!user && !fallbackEmail) return "—";
-  const name = user?.name;
-  const email = user?.email ?? fallbackEmail;
-  if (name && email) {
-    return `<span class="person-name">${escapeHtml(name)}</span><span class="person-email">${escapeHtml(email)}</span>`;
-  }
-  return escapeHtml(name || email || "—");
+function formatPerson(user) {
+  if (!user?.name) return "—";
+  return `<span class="person-name">${escapeHtml(user.name)}</span>`;
 }
 
 function formatRouteOrigin(origin) {
@@ -892,20 +883,19 @@ function renderTable() {
     .map(
       (m) => `
     <tr>
-      <td><span class="type-tag">${escapeHtml(m.meetingType)}</span>${m.fromWebsiteConcierge ? '<span class="site-tag" title="Linked to concierge.csv website session">site</span>' : ""}</td>
-      <td class="email">${escapeHtml(m.email) || "—"}</td>
+      <td><span class="type-tag">${escapeHtml(m.meetingType)}</span>${m.fromWebsiteConcierge ? '<span class="site-tag" title="Concierge booking from Meeting_new.csv">site</span>' : ""}</td>
       <td>${escapeHtml(m.company || m.title) || "—"}</td>
       <td>${escapeHtml(m.region) || escapeHtml(m.country) || "—"}</td>
       <td class="rule-cell">${formatRoutingRule(m)}</td>
       <td class="rule-cell" title="${escapeHtml(m.priorRoutingRuleName)}">${escapeHtml(m.priorRoutingRuleName || m.routingRuleName) || "—"}</td>
       <td>${m.meetingType === "handoff" ? formatRouteOrigin(m.handoffRouteOrigin) : "—"}</td>
-      <td class="person-cell">${formatPerson(m.assignedUser, m.ae)}</td>
+      <td class="person-cell">${formatPerson(m.assignedUser)}</td>
       <td>${escapeHtml(m.outcome ?? m.status) || "—"}</td>
       <td>${pill(m.bookedLive)}</td>
       <td>${pill(m.happened)}</td>
       <td>${pill(m.handoffToAe)}</td>
-      <td class="person-cell">${formatPerson(m.bookerUser, m.bdr)}</td>
-      <td class="person-cell">${formatPerson(m.hostUser, m.ae)}</td>
+      <td class="person-cell">${formatPerson(m.bookerUser)}</td>
+      <td class="person-cell">${formatPerson(m.hostUser)}</td>
     </tr>
   `,
     )

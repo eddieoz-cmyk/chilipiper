@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Concierge &amp; Handoff Meetings</title>
+    <link rel="stylesheet" href="styles.css" />
     <link rel="stylesheet" href="meetings.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -37,7 +38,7 @@
           <div class="kpi-card accent">
             <span class="kpi-label">Calendar meetings</span>
             <span class="kpi-value" id="kpiCalendarTotal">—</span>
-            <span class="kpi-foot" id="kpiCalendarFoot">From meetings.csv</span>
+            <span class="kpi-foot" id="kpiCalendarFoot">From Meeting_new.csv</span>
           </div>
           <div class="kpi-card">
             <span class="kpi-label">Concierge on calendar</span>
@@ -57,7 +58,7 @@
           <div class="kpi-card danger">
             <span class="kpi-label">Canceled</span>
             <span class="kpi-value" id="kpiCanceled">—</span>
-            <span class="kpi-foot" id="kpiCanceledFoot">From meetings.csv status</span>
+            <span class="kpi-foot" id="kpiCanceledFoot">From Meeting_new.csv status</span>
           </div>
           <div class="kpi-card muted">
             <span class="kpi-label">Chili Piper rules</span>
@@ -118,8 +119,8 @@
         </div>
         <p class="filter-summary" id="filterSummary" hidden></p>
         <p class="panel-hint" id="funnelFilterNote" hidden>
-          Website concierge funnel below uses concierge.csv for the full export year. Chart, KPIs, and table use
-          meetings.csv unless noted.
+          Concierge funnel below uses Concierge rows from <code>Meeting_new.csv</code>. Chart, KPIs, and table use the same
+          export unless noted.
         </p>
       </section>
 
@@ -174,7 +175,6 @@
             <thead>
               <tr>
                 <th>Rep</th>
-                <th>Email</th>
                 <th>Total</th>
                 <th>Concierge</th>
                 <th>ChiliCal</th>
@@ -223,8 +223,8 @@
         <h2 id="liveReportHeading" class="section-title">Live booked meetings (Concierge)</h2>
         <p class="chart-subtitle" id="liveReportSubtitle">—</p>
         <p class="panel-hint">
-          Counts from <code>meetings.csv</code> where <code>MEETING_SOURCE_TYPE = Concierge</code>, enriched with
-          region and routing rule from <code>concierge.csv</code> via <code>MEETING_ID</code>.
+          Counts from <code>Meeting_new.csv</code> where <code>MEETING_SOURCE_TYPE = Concierge</code>, with region
+          and routing rule from <code>MATCHED_ROUTE_ID</code>.
         </p>
         <div class="report-grid">
           <article class="report-block">
@@ -271,7 +271,7 @@
       <section class="report-panel card" id="outcomesReportPanel" hidden aria-labelledby="outcomesReportHeading">
         <h2 id="outcomesReportHeading" class="section-title">Meeting outcomes</h2>
         <p class="chart-subtitle" id="outcomesReportSubtitle">—</p>
-        <p class="panel-hint">Source of truth: <code>meetings.csv</code> status fields.</p>
+        <p class="panel-hint">Source of truth: <code>Meeting_new.csv</code> status fields.</p>
         <div class="outcome-bars" id="outcomeBars"></div>
         <div class="breakdown-grid" id="outcomeGrid"></div>
       </section>
@@ -280,8 +280,8 @@
         <h2 id="handoffsReportHeading" class="section-title">Handoff meetings (BDR → AE)</h2>
         <p class="chart-subtitle" id="handoffsReportSubtitle">—</p>
         <p class="panel-hint">
-          <code>MEETING_SOURCE_TYPE = Handoff</code> in meetings.csv. Prior website routing from
-          <code>concierge.csv</code> when guest email matches.
+          <code>MEETING_SOURCE_TYPE = Handoff</code> in Meeting_new.csv. BDR/AE from
+          <code>HANDED_OFF_BY</code> / <code>HANDED_OFF_TO</code>.
         </p>
         <div class="handoff-summary" id="handoffSummary"></div>
         <h3 class="subsection-title">By BDR → AE pair</h3>
@@ -309,9 +309,8 @@
         <h2 id="distributionHeading" class="section-title">Handoff distribution by AE</h2>
         <p class="chart-subtitle" id="distributionSubtitle">—</p>
         <p class="panel-hint">
-          Links each handoff guest (<code>PRIMARY_GUEST_EMAIL</code>) to their latest prior row in
-          <code>concierge.csv</code> by <code>GUEST_EMAIL</code>, then classifies
-          <code>MATCHED_ROUTE_ID</code> as geographic router vs ownership queue.
+          Handoffs with a <code>MATCHED_ROUTE_ID</code> are classified as router vs ownership queue via
+          <code>chilirules.json</code>.
         </p>
         <div class="distribution-totals" id="distributionTotals"></div>
         <div class="table-wrap">
@@ -319,7 +318,6 @@
             <thead>
               <tr>
                 <th>AE (host)</th>
-                <th>Email</th>
                 <th>Total handoffs</th>
                 <th>From router</th>
                 <th>From ownership</th>
@@ -336,20 +334,19 @@
       <section class="breakdown card" id="funnelSection" hidden aria-labelledby="funnelHeading">
         <h2 id="funnelHeading" class="section-title">Website concierge funnel (<span id="funnelYear">2026</span>)</h2>
         <p class="panel-hint">
-          From <code>concierge.csv</code> — visitors booking (or not) on the site. Not the same as
-          <code>meetings.csv</code>.
+          From Concierge rows in <code>Meeting_new.csv</code> — live bookings on the site.
         </p>
         <div class="breakdown-grid" id="funnelGrid"></div>
       </section>
 
       <section class="breakdown card" aria-labelledby="breakdownHeading">
-        <h2 id="breakdownHeading" class="section-title">Calendar meetings by type (meetings.csv)</h2>
+        <h2 id="breakdownHeading" class="section-title">Meetings by type (Meeting_new.csv)</h2>
         <div class="breakdown-grid" id="breakdownGrid"></div>
       </section>
 
       <section class="table-section card">
         <div class="table-head">
-          <h2 class="section-title">Calendar meetings (meetings.csv)</h2>
+          <h2 class="section-title">Meetings (Meeting_new.csv)</h2>
           <label class="filter-check">
             <input type="checkbox" id="onlyHeld" />
             Only meetings held
@@ -360,7 +357,6 @@
             <thead>
               <tr>
                 <th>Type</th>
-                <th>Email</th>
                 <th>Company</th>
                 <th>Region</th>
                 <th>Routing rule</th>

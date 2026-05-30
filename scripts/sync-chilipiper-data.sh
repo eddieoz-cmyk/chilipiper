@@ -15,14 +15,24 @@ fi
 
 mkdir -p "$DEST"
 
-for f in meetings.csv concierge.csv chilirules.json; do
-  if [[ -f "$SRC/$f" ]]; then
-    cp "$SRC/$f" "$DEST/$f"
-    echo "Copied $f"
-  else
-    echo "Warning: missing $SRC/$f" >&2
-  fi
-done
+MEETINGS_FILE="${CHILIPIPER_MEETINGS_FILE:-Meeting_new.csv}"
+if [[ -f "$SRC/$MEETINGS_FILE" ]]; then
+  cp "$SRC/$MEETINGS_FILE" "$DEST/$MEETINGS_FILE"
+  echo "Copied $MEETINGS_FILE"
+else
+  echo "Error: missing $SRC/$MEETINGS_FILE" >&2
+  exit 1
+fi
+
+# Remove legacy exports if present
+rm -f "$DEST"/meetings.csv "$DEST"/concierge.csv
+
+if [[ -f "$SRC/chilirules.json" ]]; then
+  cp "$SRC/chilirules.json" "$DEST/chilirules.json"
+  echo "Copied chilirules.json"
+else
+  echo "Warning: missing $SRC/chilirules.json" >&2
+fi
 
 shopt -s nullglob
 users=( "$SRC"/users-export-*.csv )
