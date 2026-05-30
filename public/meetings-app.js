@@ -1007,8 +1007,9 @@ async function loadMeetings(refresh = false) {
     /* no local server — use static JSON */
   }
 
-  const cacheBust = refresh ? `?t=${Date.now()}` : "";
-  const res = await fetch(`/meetings-data.json${cacheBust}`);
+  const dataUrl = new URL("./meetings-data.json", import.meta.url);
+  if (refresh) dataUrl.searchParams.set("t", String(Date.now()));
+  const res = await fetch(dataUrl);
   if (!res.ok) {
     $("#metaLine").textContent = "Failed to load meetings data";
     renderMeta({ lastError: `HTTP ${res.status}` });
