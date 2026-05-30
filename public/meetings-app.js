@@ -512,49 +512,6 @@ function renderRuleAssigneeBreakdown() {
   $("#ruleAssigneeEmpty").hidden = sorted.length > 0;
 }
 
-function renderDataSources() {
-  const section = $("#dataSourcesSection");
-  const linkage = data?.linkage;
-  if (!linkage || data?.meta?.source !== "chilipiper-export") {
-    section.hidden = true;
-    return;
-  }
-  section.hidden = false;
-
-  const cal = data.dataSources?.calendar;
-  const f = data.funnel?.conciergeLog;
-
-  $("#dataSourcesGrid").innerHTML = `
-    <article class="source-card">
-      <h3>${escapeHtml(cal?.label ?? "Meetings")} · <code>Meeting_new.csv</code></h3>
-      <p>${escapeHtml(cal?.description ?? "")}</p>
-      <dl class="source-stats">
-        <div><dt>Rows (${data.meta?.year ?? ""})</dt><dd>${linkage.calendarMeetings.toLocaleString()}</dd></div>
-        <div><dt>Concierge</dt><dd>${linkage.conciergeOnCalendar.toLocaleString()}</dd></div>
-        <div><dt>Handoff</dt><dd>${linkage.handoffOnCalendar.toLocaleString()}</dd></div>
-        <div><dt>ChiliCal</dt><dd>${linkage.chilicalOnCalendar.toLocaleString()}</dd></div>
-        <div><dt>With routing rule</dt><dd>${(linkage.calendarWithRouting ?? 0).toLocaleString()}</dd></div>
-      </dl>
-    </article>
-    <article class="source-card">
-      <h3>Concierge funnel · <code>Meeting_new.csv</code></h3>
-      <p>Concierge rows only — live bookings from the unified export.</p>
-      <dl class="source-stats">
-        <div><dt>Concierge rows (${f?.year ?? ""})</dt><dd>${linkage.websiteSessionsTotal.toLocaleString()}</dd></div>
-        <div><dt>Scheduled (offer result)</dt><dd>${linkage.websiteSessionsScheduled.toLocaleString()}</dd></div>
-        <div><dt>Meeting offered</dt><dd>${linkage.websiteSessionsOffered.toLocaleString()}</dd></div>
-        <div><dt>Active</dt><dd>${(f?.byStatus?.Active ?? 0).toLocaleString()}</dd></div>
-        <div><dt>Canceled</dt><dd>${(f?.byStatus?.Canceled ?? 0).toLocaleString()}</dd></div>
-      </dl>
-    </article>
-    <p class="linkage-note">
-      <strong>Single export:</strong> <code>Meeting_new.csv</code> replaces the old separate
-      <code>meetings.csv</code> and <code>concierge.csv</code> files. Routing and assignment come from
-      <code>MATCHED_ROUTE_ID</code> and <code>PRIMARY_ASSIGNED_USER_ID</code> on each row.
-    </p>
-  `;
-}
-
 function renderLiveReport(reports) {
   const panel = $("#liveReportPanel");
   const show = activeTab === "live";
@@ -711,7 +668,6 @@ function renderReports() {
 
 function renderAll() {
   updateFilterSummary();
-  renderDataSources();
   renderKpis();
   renderReports();
   const onReportTab = REPORT_TABS.has(activeTab);
