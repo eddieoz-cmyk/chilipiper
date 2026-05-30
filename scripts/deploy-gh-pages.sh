@@ -13,7 +13,8 @@ git checkout -B gh-pages
 git add -A
 git commit -q -m "Deploy static site $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
-REMOTE="${1:-origin}"
-git push -f "$REMOTE" gh-pages:gh-pages
+REMOTE="${1:-https://github.com/eddieoz-cmyk/chilipiper.git}"
+git remote add origin "$REMOTE" 2>/dev/null || git remote set-url origin "$REMOTE"
+git push -f origin gh-pages:gh-pages
 
 echo "Pushed gh-pages branch. Enable Pages: branch gh-pages, folder /"
