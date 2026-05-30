@@ -42,16 +42,17 @@ async function main() {
   await copyDir(PUBLIC, SITE, new Set(["meetings-data.json", "routing-data.json", "routing-gaps.json"]));
 
   await fs.writeFile(path.join(SITE, "meetings-data.json"), JSON.stringify(payload));
-  await fs.writeFile(
-    path.join(SITE, "site-meta.json"),
-    JSON.stringify({
-      source: "github-pages",
-      builtAt: new Date().toISOString(),
-      year: payload.meta?.year,
-      meetingRows: payload.meetings?.length ?? 0,
-      routingRuleCount: payload.routingRules?.length ?? 0,
-    }),
-  );
+  const siteMeta = {
+    source: "github-pages",
+    builtAt: new Date().toISOString(),
+    year: payload.meta?.year,
+    meetingRows: payload.meetings?.length ?? 0,
+    routingRuleCount: payload.routingRules?.length ?? 0,
+  };
+  await fs.writeFile(path.join(SITE, "site-meta.json"), JSON.stringify(siteMeta));
+  // Keep local static preview in sync (gitignored).
+  await fs.writeFile(path.join(PUBLIC, "meetings-data.json"), JSON.stringify(payload));
+  await fs.writeFile(path.join(PUBLIC, "site-meta.json"), JSON.stringify(siteMeta));
 
   const indexHtml = `<!DOCTYPE html>
 <html lang="en">

@@ -871,9 +871,13 @@ function setTab(tab) {
 
 function renderMeta(meetingsMeta) {
   const parts = [];
+  const rowCount = data?.meetings?.length ?? data?.meta?.meetingRows;
+  if (rowCount != null) {
+    parts.push(`${Number(rowCount).toLocaleString()} meetings`);
+  }
   const src = data?.meta?.source ?? meetingsMeta?.source;
   if (src === "chilipiper-export") {
-    parts.push(`Chili Piper exports (${data?.meta?.year ?? ""})`);
+    parts.push(`Meeting_new.csv (${data?.meta?.year ?? ""})`);
   } else if (src === "google-sheets") {
     parts.push("Google Sheet");
   } else if (src === "csv") {
@@ -934,14 +938,40 @@ async function loadRoutingKpi() {
   }
 }
 
+async function loadStaticMeetingsJson(refresh = false) {
+  let cacheKey = refresh ? String(Date.now()) : "";
+  try {
+    const metaUrl = new URL("./site-meta.json", import.meta.url);
+    const metaRes = await fetch(metaUrl, { cache: "no-store" });
+    if (metaRes.ok) {
+      const siteMeta = await metaRes.json();
+      cacheKey = siteMeta.builtAt ?? cacheKey;
+    }
+  } catch {
+    /* site-meta optional for older builds */
+  }
+
+  const dataUrl = new URL("./meetings-data.json", import.meta.url);
+  if (cacheKey) dataUrl.searchParams.set("v", cacheKey);
+
+  const res = await fetch(dataUrl, { cache: "no-store" });
+  if (!res.ok) {
+    $("#metaLine").textContent = "Failed to load meetings data";
+    renderMeta({ lastError: `HTTP ${res.status}` });
+    return null;
+  }
+
+  return res.json();
+}
+
 async function loadMeetings(refresh = false) {
   const q = refresh ? "?refresh=1" : "";
   let meetingsMeta = {};
 
   try {
     const [meetingsRes, metaRes] = await Promise.all([
-      fetch(`/api/meetings${q}`),
-      fetch("/api/meetings/meta"),
+      fetch(`/api/meetings${q}`, { cache: "no-store" }),
+      fetch("/api/meetings/meta", { cache: "no-store" }),
     ]);
     meetingsMeta = metaRes.ok ? await metaRes.json() : {};
     if (meetingsRes.ok) {
@@ -953,23 +983,17 @@ async function loadMeetings(refresh = false) {
     /* no local server — use static JSON */
   }
 
-  const dataUrl = new URL("./meetings-data.json", import.meta.url);
-  if (refresh) dataUrl.searchParams.set("t", String(Date.now()));
-  const res = await fetch(dataUrl);
-  if (!res.ok) {
-    $("#metaLine").textContent = "Failed to load meetings data";
-    renderMeta({ lastError: `HTTP ${res.status}` });
-    return;
-  }
+  const payload = await loadStaticMeetingsJson(refresh);
+  if (!payload) return;
 
-  data = await res.json();
+  data = payload;
   meetingsMeta = { source: "chilipiper", staticSite: true };
   applyLoadedData(meetingsMeta);
 
   if (refresh && data?.staticSite) {
     $("#setupHint").hidden = false;
     $("#setupHint").textContent =
-      "Static site — push new exports to GitHub to rebuild (Actions → Deploy GitHub Pages).";
+      "Static site — run ./scripts/deploy-gh-pages.sh after updating Meeting_new.csv.";
   }
 }
 

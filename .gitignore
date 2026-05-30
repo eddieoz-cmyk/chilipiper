@@ -5,4 +5,5 @@ node_modules/
 
 # Generated locally or in CI — do not commit
 public/meetings-data.json
+public/site-meta.json
 site/
