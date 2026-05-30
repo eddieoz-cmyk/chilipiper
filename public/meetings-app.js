@@ -10,7 +10,7 @@ let activeTab = "all";
 const filters = {
   dateFrom: "",
   dateTo: "",
-  dateField: "meetingAt",
+  dateField: "bookedAt",
   repKey: "",
   routingRuleId: "",
   region: "",
@@ -172,6 +172,12 @@ function populateFilterControls() {
 
   $("#filterDateFrom").value = filters.dateFrom;
   $("#filterDateTo").value = filters.dateTo;
+  if (opts.dateRangeMin) $("#filterDateFrom").min = opts.dateRangeMin;
+  if (opts.dateRangeMax) {
+    $("#filterDateFrom").max = opts.dateRangeMax;
+    $("#filterDateTo").max = opts.dateRangeMax;
+  }
+  if (opts.dateRangeMin) $("#filterDateTo").min = opts.dateRangeMin;
   $("#filterDateField").value = filters.dateField;
 
   const typeSel = $("#filterMeetingType");
@@ -222,7 +228,7 @@ function clearFilters() {
   const opts = data?.filterOptions;
   filters.dateFrom = opts?.dateFrom ?? "";
   filters.dateTo = opts?.dateTo ?? "";
-  filters.dateField = "meetingAt";
+  filters.dateField = "bookedAt";
   filters.repKey = "";
   filters.routingRuleId = "";
   filters.region = "";
