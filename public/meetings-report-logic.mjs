@@ -10,8 +10,8 @@ export function parseMeetingDate(value) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
-export function meetingDate(m, dateField = "meetingAt") {
-  return parseMeetingDate(m[dateField]) ?? parseMeetingDate(m.meetingAt) ?? parseMeetingDate(m.bookedAt);
+export function meetingDate(m, dateField = "bookedAt") {
+  return parseMeetingDate(m[dateField]) ?? parseMeetingDate(m.bookedAt) ?? parseMeetingDate(m.meetingAt);
 }
 
 export function repKeysForMeeting(m) {
@@ -69,8 +69,8 @@ function repLabel(person, fallbackEmail) {
   return person?.name ?? person?.email ?? fallbackEmail ?? "Unknown";
 }
 
-/** Live booked = Concierge source on calendar (website routing → meeting). */
-export function computeLiveBookedReport(meetings, dateField = "meetingAt") {
+/** Website inbound meetings booked in the selected period. */
+export function computeLiveBookedReport(meetings, dateField = "bookedAt") {
   const live = meetings.filter((m) => m.meetingType === "concierge");
   const byDate = new Map();
   const byRegion = new Map();
@@ -140,11 +140,11 @@ export function computeRuleBdrDistribution(meetings) {
 }
 
 export function computeOutcomeReport(meetings) {
-  const counts = { happened: 0, canceled: 0, rescheduled: 0, noshow: 0, scheduled: 0 };
+  const counts = { scheduled: 0, canceled: 0, rescheduled: 0, noshow: 0, completed: 0, unknown: 0 };
   for (const m of meetings) {
-    const o = m.outcome ?? (m.happened ? "happened" : m.canceled ? "canceled" : "scheduled");
+    const o = m.outcome ?? (m.canceled ? "canceled" : m.isScheduled ? "scheduled" : "unknown");
     if (counts[o] != null) counts[o]++;
-    else counts.scheduled++;
+    else counts.unknown++;
   }
   const total = meetings.length;
   return { total, counts };
@@ -166,7 +166,7 @@ export function computeHandoffReport(meetings) {
         aeName: repLabel(ae, m.ae),
         aeEmail: ae.email ?? m.ae,
         total: 0,
-        happened: 0,
+        scheduled: 0,
         canceled: 0,
         fromRouter: 0,
         fromOwnership: 0,
@@ -175,7 +175,7 @@ export function computeHandoffReport(meetings) {
     }
     const p = pairs.get(pairKey);
     p.total++;
-    if (m.happened) p.happened++;
+    if (m.isScheduled) p.scheduled++;
     if (m.canceled) p.canceled++;
     const origin = m.handoffRouteOrigin ?? "unlinked";
     if (origin === "router") p.fromRouter++;
@@ -200,14 +200,14 @@ export function computeHandoffReport(meetings) {
 
   return {
     total: handoffs.length,
-    happened: handoffs.filter((m) => m.happened).length,
+    scheduled: handoffs.filter((m) => m.isScheduled).length,
     canceled: handoffs.filter((m) => m.canceled).length,
     byPair: [...pairs.values()].sort((a, b) => b.total - a.total),
-    rows: rows.sort((a, b) => String(b.meetingAt).localeCompare(String(a.meetingAt))),
+    rows: rows.sort((a, b) => String(b.bookedAt).localeCompare(String(a.bookedAt))),
   };
 }
 
-export function computeMeetingsReports(meetings, dateField = "meetingAt") {
+export function computeMeetingsReports(meetings, dateField = "bookedAt") {
   return {
     liveBooked: computeLiveBookedReport(meetings, dateField),
     ruleBdrDistribution: computeRuleBdrDistribution(meetings),

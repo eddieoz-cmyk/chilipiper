@@ -2,6 +2,13 @@ import {
   applyMeetingFilters as applyFilters,
   computeMeetingsReports,
 } from "./meetings-report-logic.mjs";
+import {
+  formatBookedDate,
+  formatPeriodLabel,
+  meetingTypeLabel,
+  meetingTypeShort,
+  statusLabel,
+} from "./sales-meeting-labels.mjs";
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -43,48 +50,43 @@ function pct(n, d) {
   return Math.round((n / d) * 1000) / 10;
 }
 
-function computeMeetingsMetrics(allMeetings) {
-  function summarizeType(meetingType) {
-    const rows = allMeetings.filter((m) => m.meetingType === meetingType);
-    const total = rows.length;
-    const bookedLive = rows.filter((m) => m.bookedLive).length;
-    const happened = rows.filter((m) => m.happened).length;
-    const handoffToAe = rows.filter((m) => m.handoffToAe).length;
-    return {
-      meetingType,
-      total,
-      booked: rows.filter((m) => m.booked || m.bookedLive).length,
-      bookedLive,
-      happened,
-      handoffToAe,
-      rates: {
-        bookedLiveOfTotal: pct(bookedLive, total),
-        happenedOfBookedLive: pct(happened, bookedLive),
-        happenedOfTotal: pct(happened, total),
-        handoffOfTotal: pct(handoffToAe, total),
-        handoffOfHappened: pct(handoffToAe, happened),
-      },
-    };
-  }
+function summarizeType(allMeetings, meetingType) {
+  const rows = allMeetings.filter((m) => m.meetingType === meetingType);
+  const total = rows.length;
+  const scheduled = rows.filter((m) => m.isScheduled).length;
+  const canceled = rows.filter((m) => m.canceled).length;
+  return {
+    meetingType,
+    total,
+    scheduled,
+    canceled,
+    rates: {
+      scheduledOfTotal: pct(scheduled, total),
+      canceledOfTotal: pct(canceled, total),
+    },
+  };
+}
 
-  const concierge = summarizeType("concierge");
-  const handoff = summarizeType("handoff");
-  const bookedLive = allMeetings.filter((m) => m.bookedLive).length;
-  const happened = allMeetings.filter((m) => m.happened).length;
-  const handoffToAe = allMeetings.filter((m) => m.handoffToAe).length;
+function computeMeetingsMetrics(allMeetings) {
+  const concierge = summarizeType(allMeetings, "concierge");
+  const handoff = summarizeType(allMeetings, "handoff");
+  const chilical = summarizeType(allMeetings, "chilical");
+  const scheduled = allMeetings.filter((m) => m.isScheduled).length;
+  const canceled = allMeetings.filter((m) => m.canceled).length;
   const total = allMeetings.length;
 
   return {
     total,
-    bookedLive,
-    happened,
-    handoffToAe,
+    scheduled,
+    canceled,
+    bookedLive: concierge.total,
+    handoffToAe: handoff.total,
+    chilical: chilical.total,
     rates: {
-      bookedLiveOfTotal: pct(bookedLive, total),
-      happenedOfBookedLive: pct(happened, bookedLive),
-      handoffOfHappened: pct(handoffToAe, happened),
+      scheduledOfTotal: pct(scheduled, total),
+      canceledOfTotal: pct(canceled, total),
     },
-    byType: { concierge, handoff },
+    byType: { concierge, handoff, chilical },
   };
 }
 
@@ -106,11 +108,8 @@ function applyMeetingFilters(meetings) {
 
 function getFilteredMeetings() {
   let rows = applyMeetingFilters(data?.meetings ?? []);
-  if (activeTab === "concierge" || activeTab === "handoff") {
-    rows = rows.filter((m) => m.meetingType === activeTab);
-  }
-  if ($("#onlyHeld").checked) {
-    rows = rows.filter((m) => m.happened);
+  if ($("#excludeCanceled")?.checked) {
+    rows = rows.filter((m) => m.isScheduled);
   }
   return rows;
 }
@@ -131,18 +130,15 @@ function updateFilterSummary() {
   const filtered = applyMeetingFilters(data?.meetings ?? []).length;
   const el = $("#filterSummary");
   const clearBtn = $("#clearFiltersBtn");
-  const funnelNote = $("#funnelFilterNote");
 
   if (!filtersActive() && filtered === total) {
     el.hidden = true;
     clearBtn.hidden = true;
-    funnelNote.hidden = true;
     return;
   }
 
   el.hidden = false;
   clearBtn.hidden = false;
-  funnelNote.hidden = !data?.funnel?.conciergeLog;
 
   const parts = [`Showing ${filtered.toLocaleString()} of ${total.toLocaleString()} meetings`];
   if (filters.repKey) {
@@ -156,9 +152,9 @@ function updateFilterSummary() {
     parts.push(`rule: ${name}`);
   }
   if (filters.region) parts.push(`region: ${filters.region}`);
-  if (filters.meetingType) parts.push(`type: ${filters.meetingType}`);
+  if (filters.meetingType) parts.push(`source: ${meetingTypeLabel(filters.meetingType)}`);
   if (filters.dateFrom || filters.dateTo) {
-    parts.push(`dates: ${filters.dateFrom || "…"} → ${filters.dateTo || "…"}`);
+    parts.push(formatPeriodLabel(filters.dateFrom, filters.dateTo));
   }
   el.textContent = parts.join(" · ");
 }
@@ -178,7 +174,6 @@ function populateFilterControls() {
     $("#filterDateTo").max = opts.dateRangeMax;
   }
   if (opts.dateRangeMin) $("#filterDateTo").min = opts.dateRangeMin;
-  $("#filterDateField").value = filters.dateField;
 
   const typeSel = $("#filterMeetingType");
   typeSel.value = filters.meetingType;
@@ -372,7 +367,7 @@ function renderPeriodChart() {
 
   const granLabel =
     granularity === "month" ? "month" : granularity === "week" ? "week" : "day";
-  const dateLabel = filters.dateField === "bookedAt" ? "booked date" : "meeting date";
+  const dateLabel = "booking date";
   let subtitle = `${total.toLocaleString()} meetings · by ${granLabel} · ${dateLabel}`;
   if (rangeFrom && rangeTo) {
     const fmt = (d) =>
@@ -444,18 +439,14 @@ function renderPeriodChart() {
 }
 
 function repKeyForMeeting(m) {
-  const person = m.assignedUser ?? m.hostUser;
+  const person = m.assignedUser ?? m.hostUser ?? m.bookerUser;
   if (person?.id) return `id:${person.id}`;
-  if (person?.email) return `email:${person.email}`;
-  if (m.ae) return `email:${m.ae}`;
   return "unknown";
 }
 
 function repDisplayForMeeting(m) {
-  const person = m.assignedUser ?? m.hostUser;
-  return {
-    name: person?.name ?? "Unknown",
-  };
+  const person = m.assignedUser ?? m.hostUser ?? m.bookerUser;
+  return { name: person?.name ?? "Unknown" };
 }
 
 function renderRuleAssigneeBreakdown() {
@@ -473,8 +464,8 @@ function renderRuleAssigneeBreakdown() {
   section.hidden = false;
   $("#ruleAssigneeHeading").textContent = "Meetings by rep";
   $("#ruleAssigneeSubtitle").textContent = rule?.name
-    ? `${rows.length.toLocaleString()} meetings (Meeting_new.csv) on rule: ${rule.name}.`
-    : `${rows.length.toLocaleString()} calendar meetings for selected rule`;
+    ? `${rows.length.toLocaleString()} meetings on “${rule.name}” in this period`
+    : `${rows.length.toLocaleString()} meetings for selected rule`;
 
   const byRep = new Map();
   for (const m of rows) {
@@ -487,12 +478,14 @@ function renderRuleAssigneeBreakdown() {
         concierge: 0,
         chilical: 0,
         handoff: 0,
-        held: 0,
+        scheduled: 0,
+        canceled: 0,
       });
     }
     const r = byRep.get(key);
     r.total++;
-    if (m.happened) r.held++;
+    if (m.isScheduled) r.scheduled++;
+    if (m.canceled) r.canceled++;
     if (m.meetingType === "concierge") r.concierge++;
     else if (m.meetingType === "handoff") r.handoff++;
     else if (m.meetingType === "chilical") r.chilical++;
@@ -509,7 +502,8 @@ function renderRuleAssigneeBreakdown() {
       <td class="num">${r.concierge}</td>
       <td class="num">${r.chilical}</td>
       <td class="num">${r.handoff}</td>
-      <td class="num">${r.held}</td>
+      <td class="num">${r.scheduled}</td>
+      <td class="num">${r.canceled}</td>
     </tr>
   `,
     )
@@ -525,7 +519,7 @@ function renderLiveReport(reports) {
   if (!show) return;
 
   const live = reports.liveBooked;
-  $("#liveReportSubtitle").textContent = `${live.total.toLocaleString()} live Concierge bookings in filtered period`;
+  $("#liveReportSubtitle").textContent = `${live.total.toLocaleString()} website inbound meetings in this period`;
   $("#badgeLive").textContent = String(live.total);
 
   $("#liveByDateBody").innerHTML = live.byDate
@@ -596,15 +590,16 @@ function renderOutcomesReport(reports) {
   $("#badgeOutcomes").textContent = String(total);
 
   const items = [
-    { key: "happened", label: "Happened", cls: "success" },
+    { key: "scheduled", label: "Scheduled", cls: "success" },
     { key: "canceled", label: "Canceled", cls: "danger" },
     { key: "rescheduled", label: "Rescheduled", cls: "warning" },
     { key: "noshow", label: "No-show", cls: "muted" },
-    { key: "scheduled", label: "Scheduled / other", cls: "other" },
+    { key: "completed", label: "Completed", cls: "success" },
+    { key: "unknown", label: "Other", cls: "other" },
   ];
 
   $("#outcomeBars").innerHTML = items
-    .filter((i) => counts[i.key] > 0 || i.key === "happened" || i.key === "canceled")
+    .filter((i) => counts[i.key] > 0 || i.key === "scheduled" || i.key === "canceled")
     .map((i) => {
       const n = counts[i.key] ?? 0;
       const pctVal = total ? Math.round((n / total) * 1000) / 10 : 0;
@@ -635,12 +630,12 @@ function renderHandoffsReport(reports) {
   if (!show) return;
 
   const h = reports.handoffs;
-  $("#handoffsReportSubtitle").textContent = `${h.total.toLocaleString()} handoffs · ${h.happened.toLocaleString()} held · ${h.canceled.toLocaleString()} canceled`;
+  $("#handoffsReportSubtitle").textContent = `${h.total.toLocaleString()} handoffs · ${h.scheduled.toLocaleString()} scheduled · ${h.canceled.toLocaleString()} canceled`;
   $("#badgeHandoffs").textContent = String(h.total);
 
   $("#handoffSummary").innerHTML = `
     <span>Total <strong>${h.total}</strong></span>
-    <span>Held <strong>${h.happened}</strong></span>
+    <span>Scheduled <strong>${h.scheduled}</strong></span>
     <span>Canceled <strong>${h.canceled}</strong></span>
     <span>BDR→AE pairs <strong>${h.byPair.length}</strong></span>`;
 
@@ -651,11 +646,8 @@ function renderHandoffsReport(reports) {
       <td>${escapeHtml(p.bdrName)}</td>
       <td>${escapeHtml(p.aeName)}</td>
       <td class="num">${p.total}</td>
-      <td class="num">${p.happened}</td>
+      <td class="num">${p.scheduled}</td>
       <td class="num">${p.canceled}</td>
-      <td class="num">${p.fromRouter}</td>
-      <td class="num">${p.fromOwnership}</td>
-      <td class="num">${p.unlinked}</td>
     </tr>`,
     )
     .join("");
@@ -689,47 +681,45 @@ function renderAll() {
     renderTable();
   }
   $("#distributionPanel")?.setAttribute("hidden", "");
+  updatePeriodLine();
+}
+
+function updatePeriodLine() {
+  const el = $("#periodLine");
+  if (!el) return;
+  const label = formatPeriodLabel(filters.dateFrom, filters.dateTo);
+  if (!label) {
+    el.hidden = true;
+    return;
+  }
+  const count = applyMeetingFilters(data?.meetings ?? []).length;
+  el.textContent = `${label} · ${count.toLocaleString()} meetings in view`;
+  el.hidden = false;
 }
 
 function renderKpis() {
   const m = getMetricsForView();
-  const linkage = data?.linkage;
   const filtered = filtersActive();
 
   $("#kpiCalendarTotal").textContent = String(m.total);
   $("#kpiConciergeCalendar").textContent = String(m.byType.concierge.total);
-  $("#kpiHappened").textContent = String(m.happened);
   $("#kpiHandoff").textContent = String(m.byType.handoff.total);
+  $("#kpiChilical").textContent = String(m.byType.chilical?.total ?? 0);
+  $("#kpiScheduled").textContent = String(m.scheduled);
 
-  const filteredRows = applyMeetingFilters(data?.meetings ?? []);
-  const canceled = filteredRows.filter((r) => r.canceled || r.outcome === "canceled").length;
+  const canceled = m.canceled;
   $("#kpiCanceled").textContent = String(canceled);
-  $("#kpiCanceledFoot").textContent = filtered
-    ? `${formatRate(pct(canceled, m.total))} of filtered calendar`
-    : "MEETING_STATUS / EXTENDED = Canceled";
+  $("#kpiCanceledFoot").textContent = `${formatRate(m.rates.canceledOfTotal)} cancel rate`;
 
-  if (filtered) {
-    $("#kpiCalendarFoot").textContent = "Filtered rows from Meeting_new.csv";
-    $("#kpiConciergeCalendarFoot").textContent = `${m.byType.concierge.total} of ${m.total} filtered calendar`;
-  } else if (linkage) {
-    $("#kpiCalendarFoot").textContent = `${linkage.websiteSessionsScheduled.toLocaleString()} Concierge scheduled (Meeting_new.csv)`;
-    $("#kpiConciergeCalendarFoot").textContent = `${linkage.calendarWithWebsiteLog.toLocaleString()} also in website log`;
-  } else {
-    $("#kpiCalendarFoot").textContent = "All rows in Meeting_new.csv";
-    $("#kpiConciergeCalendarFoot").textContent = "MEETING_SOURCE_TYPE = Concierge";
-  }
-
-  $("#kpiHappenedFoot").textContent = filtered
-    ? `${formatRate(m.rates.happenedOfBookedLive)} of filtered Concierge on calendar`
-    : "Not canceled / no-show (Meeting_new.csv)";
-  $("#kpiHandoffFoot").textContent = filtered
-    ? `${formatRate(m.byType.handoff.rates.handoffOfTotal)} of filtered calendar`
-    : "BDR handoff bookings in Meeting_new.csv";
+  $("#kpiCalendarFoot").textContent = filtered ? "Custom date range" : "This month (booking date)";
+  $("#kpiConciergeCalendarFoot").textContent = `${formatRate(pct(m.byType.concierge.total, m.total))} of total`;
+  $("#kpiHandoffFoot").textContent = `${formatRate(pct(m.byType.handoff.total, m.total))} of total`;
+  $("#kpiChilicalFoot").textContent = `${formatRate(pct(m.byType.chilical?.total ?? 0, m.total))} of total`;
+  $("#kpiScheduledFoot").textContent = `${formatRate(m.rates.scheduledOfTotal)} still on calendar`;
 
   $("#badgeAll").textContent = String(m.total);
-  $("#badgeConcierge").textContent = String(m.byType.concierge.total);
-  $("#badgeHandoff").textContent = String(m.byType.handoff.total);
 
+  const filteredRows = applyMeetingFilters(data?.meetings ?? []);
   const reports = computeMeetingsReports(filteredRows, filters.dateField);
   $("#badgeLive").textContent = String(reports.liveBooked.total);
   $("#badgeBdr").textContent = String(reports.ruleBdrDistribution.length);
@@ -737,51 +727,13 @@ function renderKpis() {
   $("#badgeHandoffs").textContent = String(reports.handoffs.total);
 }
 
-function renderFunnel() {
-  const funnel = data?.funnel?.conciergeLog;
-  const section = $("#funnelSection");
-  if (!funnel) {
-    section.hidden = true;
-    return;
-  }
-  section.hidden = false;
-  $("#funnelYear").textContent = String(funnel.year ?? data?.meta?.year ?? "");
-
-  const users = data?.users;
-  const usersBlock = users
-    ? `<div class="breakdown-card">
-        <h3>Users export</h3>
-        <dl class="breakdown-stats">
-          <div><dt>Total users</dt><dd>${users.total}</dd></div>
-          <div><dt>Active</dt><dd>${users.active}</dd></div>
-          <div><dt>Concierge Live license</dt><dd>${users.withConciergeLive}</dd></div>
-          <div><dt>Handoff license</dt><dd>${users.withHandoff}</dd></div>
-        </dl>
-      </div>`
-    : "";
-
-  $("#funnelGrid").innerHTML = `
-    <article class="breakdown-card">
-      <h3>Concierge sessions</h3>
-      <dl class="breakdown-stats">
-        <div><dt>Triggered</dt><dd>${funnel.total.toLocaleString()}</dd></div>
-        <div><dt>Meeting offered</dt><dd>${funnel.meetingOffered.toLocaleString()}</dd></div>
-        <div><dt>Scheduled (booked)</dt><dd>${funnel.scheduled.toLocaleString()}</dd></div>
-        <div><dt>Timed out</dt><dd>${(funnel.timedOut ?? 0).toLocaleString()}</dd></div>
-        <div><dt>Disqualified</dt><dd>${(funnel.disqualified ?? 0).toLocaleString()}</dd></div>
-        <div><dt>Cancelled</dt><dd>${(funnel.cancelled ?? 0).toLocaleString()}</dd></div>
-      </dl>
-    </article>
-    ${usersBlock}
-  `;
-}
-
 function renderBreakdown() {
   const m = getMetricsForView();
   const grid = $("#breakdownGrid");
   const types = [
-    { key: "concierge", title: "Concierge meetings" },
-    { key: "handoff", title: "BDR handoff meetings" },
+    { key: "concierge", title: "Website inbound" },
+    { key: "handoff", title: "BDR → AE handoff" },
+    { key: "chilical", title: "Rep calendar" },
   ];
 
   grid.innerHTML = types
@@ -792,12 +744,10 @@ function renderBreakdown() {
         <article class="breakdown-card">
           <h3>${escapeHtml(title)}</h3>
           <dl class="breakdown-stats">
-            <div><dt>Total rows</dt><dd>${s.total}</dd></div>
-            <div><dt>Booked live</dt><dd>${s.bookedLive}</dd></div>
-            <div><dt>Held</dt><dd>${s.happened}</dd></div>
-            <div><dt>BDR → AE</dt><dd>${s.handoffToAe}</dd></div>
-            <div><dt>Held / live</dt><dd>${formatRate(s.rates.happenedOfBookedLive)}</dd></div>
-            <div><dt>Handoff / held</dt><dd>${formatRate(s.rates.handoffOfHappened)}</dd></div>
+            <div><dt>Booked</dt><dd>${s.total.toLocaleString()}</dd></div>
+            <div><dt>Scheduled</dt><dd>${s.scheduled.toLocaleString()}</dd></div>
+            <div><dt>Canceled</dt><dd>${s.canceled.toLocaleString()}</dd></div>
+            <div><dt>Cancel rate</dt><dd>${formatRate(s.rates.canceledOfTotal)}</dd></div>
           </dl>
         </article>
       `;
@@ -811,10 +761,10 @@ function filteredMeetingsForTable() {
   return rows.slice(0, 400);
 }
 
-function pill(yes) {
-  const cls = yes ? "yes" : "no";
-  const label = yes ? "Yes" : "—";
-  return `<span class="pill ${cls}">${label}</span>`;
+function statusPill(m) {
+  const label = m.statusLabel ?? statusLabel(m.status);
+  const cls = m.canceled ? "canceled" : "scheduled";
+  return `<span class="status-pill ${cls}">${escapeHtml(label)}</span>`;
 }
 
 function formatPerson(user) {
@@ -838,6 +788,15 @@ function formatRoutingRule(m) {
   return `<span class="rule-name" title="${escapeHtml(title)}">${escapeHtml(name)}</span>${sub ? `<span class="rule-meta">${escapeHtml(sub)}</span>` : ""}`;
 }
 
+function bdrPerson(m) {
+  if (m.meetingType === "handoff") return m.bookerUser ?? m.assignedUser;
+  return m.assignedUser ?? m.bookerUser;
+}
+
+function aePerson(m) {
+  return m.hostUser;
+}
+
 function renderTable() {
   const rows = filteredMeetingsForTable();
   const tbody = $("#meetingsBody");
@@ -845,19 +804,14 @@ function renderTable() {
     .map(
       (m) => `
     <tr>
-      <td><span class="type-tag">${escapeHtml(m.meetingType)}</span>${m.fromWebsiteConcierge ? '<span class="site-tag" title="Concierge booking from Meeting_new.csv">site</span>' : ""}</td>
+      <td class="date-cell">${formatBookedDate(m.bookedAt)}</td>
       <td>${escapeHtml(m.company || m.title) || "—"}</td>
-      <td>${escapeHtml(m.region) || escapeHtml(m.country) || "—"}</td>
+      <td><span class="type-tag type-${escapeHtml(m.meetingType)}">${escapeHtml(meetingTypeShort(m.meetingType))}</span></td>
+      <td>${escapeHtml(m.region) || "—"}</td>
       <td class="rule-cell">${formatRoutingRule(m)}</td>
-      <td class="rule-cell" title="${escapeHtml(m.priorRoutingRuleName)}">${escapeHtml(m.priorRoutingRuleName || m.routingRuleName) || "—"}</td>
-      <td>${m.meetingType === "handoff" ? formatRouteOrigin(m.handoffRouteOrigin) : "—"}</td>
-      <td class="person-cell">${formatPerson(m.assignedUser)}</td>
-      <td>${escapeHtml(m.outcome ?? m.status) || "—"}</td>
-      <td>${pill(m.bookedLive)}</td>
-      <td>${pill(m.happened)}</td>
-      <td>${pill(m.handoffToAe)}</td>
-      <td class="person-cell">${formatPerson(m.bookerUser)}</td>
-      <td class="person-cell">${formatPerson(m.hostUser)}</td>
+      <td class="person-cell">${formatPerson(bdrPerson(m))}</td>
+      <td class="person-cell">${formatPerson(aePerson(m))}</td>
+      <td>${statusPill(m)}</td>
     </tr>
   `,
     )
@@ -879,11 +833,11 @@ function renderMeta(meetingsMeta) {
   const parts = [];
   const rowCount = data?.meetings?.length ?? data?.meta?.meetingRows;
   if (rowCount != null) {
-    parts.push(`${Number(rowCount).toLocaleString()} meetings`);
+    parts.push(`${Number(rowCount).toLocaleString()} meetings in file`);
   }
   const src = data?.meta?.source ?? meetingsMeta?.source;
   if (src === "chilipiper-export") {
-    parts.push(`Meeting_new.csv (${data?.meta?.year ?? ""})`);
+    parts.push("Chili Piper export");
   } else if (src === "google-sheets") {
     parts.push("Google Sheet");
   } else if (src === "csv") {
@@ -892,7 +846,7 @@ function renderMeta(meetingsMeta) {
   if (data?.meta?.fetchedAt) {
     parts.push(`Updated ${new Date(data.meta.fetchedAt).toLocaleString()}`);
   }
-  $("#metaLine").textContent = parts.join(" · ") || "Meetings funnel";
+  $("#metaLine").textContent = parts.join(" · ") || "Sales meetings";
 
   const sheetId = meetingsMeta?.spreadsheetId ?? data?.meta?.spreadsheetId;
   const link = $("#sheetLink");
@@ -912,8 +866,7 @@ function renderMeta(meetingsMeta) {
     hint.textContent =
       "Using sample CSV data. Point MEETINGS_SPREADSHEET_ID at your live sheet (share: anyone with link can view) to go live.";
   } else if (src === "chilipiper-export") {
-    hint.hidden = false;
-    hint.textContent = `Loaded from ${data?.meta?.dataDir ?? "chilipiper folder"}. Refresh exports in that folder and click Refresh.`;
+    hint.hidden = true;
   } else {
     hint.hidden = true;
   }
@@ -1012,21 +965,18 @@ function applyLoadedData(meetingsMeta) {
   filters.meetingType = "";
 
   populateFilterControls();
-  renderFunnel();
   renderAll();
   renderMeta(meetingsMeta);
-  loadRoutingKpi();
 }
 
 function init() {
   $("#refreshBtn").addEventListener("click", () => loadMeetings(true));
-  $("#onlyHeld").addEventListener("change", renderAll);
+  $("#excludeCanceled")?.addEventListener("change", renderAll);
   $("#clearFiltersBtn").addEventListener("click", clearFilters);
 
   for (const id of [
     "filterDateFrom",
     "filterDateTo",
-    "filterDateField",
     "filterRep",
     "filterRoutingRule",
     "filterRegion",
@@ -1038,15 +988,13 @@ function init() {
           ? "dateFrom"
           : id === "filterDateTo"
             ? "dateTo"
-            : id === "filterDateField"
-              ? "dateField"
-              : id === "filterRep"
-                ? "repKey"
-                : id === "filterRegion"
-                  ? "region"
-                  : id === "filterMeetingType"
-                    ? "meetingType"
-                    : "routingRuleId";
+            : id === "filterRep"
+              ? "repKey"
+              : id === "filterRegion"
+                ? "region"
+                : id === "filterMeetingType"
+                  ? "meetingType"
+                  : "routingRuleId";
       filters[key] = e.target.value;
       renderAll();
     });
