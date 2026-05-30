@@ -10,9 +10,20 @@ Repo: **https://github.com/eddieoz-cmyk/chilipiper** (private)
 
 ### 2. Enable GitHub Pages
 
-1. Open **Settings → Pages** on the repo
-2. Under **Build and deployment**, set **Source** to **GitHub Actions**
-3. Push to `main` (or run **Actions → Deploy GitHub Pages → Run workflow**)
+**Option A — gh-pages branch (no Actions needed)**
+
+```bash
+chmod +x scripts/deploy-gh-pages.sh
+./scripts/deploy-gh-pages.sh
+```
+
+Then in the repo: **Settings → Pages → Deploy from branch `gh-pages` / root**.
+
+**Option B — GitHub Actions** (requires `workflow` token scope on push)
+
+1. Restore `.github/workflows/pages.yml` if removed
+2. **Settings → Pages → Source: GitHub Actions**
+3. Push to `main`
 
 After the workflow succeeds (~2–3 min), your site is at:
 
