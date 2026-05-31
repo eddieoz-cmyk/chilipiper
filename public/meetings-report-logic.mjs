@@ -50,11 +50,19 @@ export function primaryRepName(m) {
   return person?.name ?? "Unknown";
 }
 
-/** Routing rules only exist on website inbound rows in this export. */
-function applyRoutingRuleFilter(rows, routingRuleId, meetingType) {
-  if (!routingRuleId) return rows;
+/** Region and routing rule exist only on website inbound rows in this export. */
+function applyWebsiteOnlyFilters(rows, filters) {
+  const { routingRuleId, region, meetingType } = filters;
+  const hasWebsiteFilter = Boolean(routingRuleId || region);
+  if (!hasWebsiteFilter) return rows;
   if (meetingType === "handoff" || meetingType === "chilical") return rows;
-  return rows.filter((m) => m.routingRuleId === routingRuleId);
+
+  return rows.filter((m) => {
+    if (m.meetingType !== "concierge") return true;
+    if (routingRuleId && m.routingRuleId !== routingRuleId) return false;
+    if (region && m.region !== region) return false;
+    return true;
+  });
 }
 
 export function applyMeetingFilters(meetings, filters) {
@@ -73,10 +81,9 @@ export function applyMeetingFilters(meetings, filters) {
     });
   }
 
-  if (filters.region) rows = rows.filter((m) => m.region === filters.region);
-  rows = applyRoutingRuleFilter(rows, filters.routingRuleId, filters.meetingType);
   if (filters.meetingType) rows = rows.filter((m) => m.meetingType === filters.meetingType);
   if (filters.repKey) rows = rows.filter((m) => meetingMatchesRep(m, filters.repKey));
+  rows = applyWebsiteOnlyFilters(rows, filters);
 
   return rows;
 }

@@ -156,20 +156,51 @@ function updateFilterSummary() {
   const parts = [`Showing ${filtered.toLocaleString()} of ${total.toLocaleString()} meetings`];
   if (filters.repKey) {
     const rep = data?.filterOptions?.reps?.find((r) => r.key === filters.repKey);
-    parts.push(`rep: ${rep?.name ?? rep?.email ?? filters.repKey}`);
+    parts.push(`rep: ${rep?.name ?? filters.repKey.replace(/^id:|^email:/, "")}`);
   }
   if (filters.routingRuleId) {
     const name =
       data?.filterOptions?.routingRules?.find((r) => r.id === filters.routingRuleId)?.name ??
       "selected rule";
-    parts.push(`rule: ${name}`);
+    parts.push(`website rule: ${name}`);
   }
-  if (filters.region) parts.push(`region: ${filters.region}`);
+  if (filters.region) parts.push(`website region: ${filters.region}`);
   if (filters.meetingType) parts.push(`source: ${meetingTypeLabel(filters.meetingType)}`);
   if (filters.dateFrom || filters.dateTo) {
     parts.push(formatPeriodLabel(filters.dateFrom, filters.dateTo));
   }
   el.textContent = parts.join(" · ");
+}
+
+function updateFilterControlState() {
+  const websiteOnlySource =
+    filters.meetingType === "handoff" || filters.meetingType === "chilical";
+  const ruleField = $("#filterRoutingRuleField");
+  const regionField = $("#filterRegionField");
+  const ruleSel = $("#filterRoutingRule");
+  const regionSel = $("#filterRegion");
+  const hint = $("#filterHint");
+
+  if (ruleSel) ruleSel.disabled = websiteOnlySource;
+  if (regionSel) regionSel.disabled = websiteOnlySource;
+  ruleField?.classList.toggle("filter-disabled", websiteOnlySource);
+  regionField?.classList.toggle("filter-disabled", websiteOnlySource);
+
+  if (hint) {
+    hint.hidden = false;
+    hint.innerHTML = websiteOnlySource
+      ? "Region and routing rule are disabled for handoffs and rep calendar — those rows have no website routing data. Use <strong>date</strong> and <strong>rep</strong> instead."
+      : "Date and rep apply to all sources. Region and routing rule apply to <strong>website inbound only</strong> — handoffs and rep calendar stay in view when those filters are set.";
+  }
+}
+
+function syncFilterDates(changedKey) {
+  if (!filters.dateFrom || !filters.dateTo) return;
+  if (filters.dateFrom <= filters.dateTo) return;
+  if (changedKey === "dateFrom") filters.dateTo = filters.dateFrom;
+  else filters.dateFrom = filters.dateTo;
+  $("#filterDateFrom").value = filters.dateFrom;
+  $("#filterDateTo").value = filters.dateTo;
 }
 
 function populateFilterControls() {
@@ -230,6 +261,7 @@ function populateFilterControls() {
   }
   ruleSel.innerHTML = rulesHtml;
   ruleSel.value = filters.routingRuleId;
+  updateFilterControlState();
 }
 
 function clearFilters() {
@@ -377,7 +409,7 @@ function buildPeriodSeries(meetings) {
 }
 
 function renderPeriodChart() {
-  const meetings = getFilteredMeetings();
+  const meetings = getFilteredForReports();
   const { buckets, granularity, total, rangeFrom, rangeTo } = buildPeriodSeries(meetings);
   const svg = $("#periodChart");
   const empty = $("#chartEmpty");
@@ -398,7 +430,7 @@ function renderPeriodChart() {
     empty.hidden = false;
     empty.textContent =
       meetings.length === 0
-        ? "No meetings match the current filters. Try clearing the routing rule when viewing handoffs or rep calendar."
+        ? "No meetings match the current filters. Widen the date range or clear website-only filters."
         : "No bookings to chart for this period.";
     return;
   }
@@ -477,20 +509,14 @@ function renderRuleAssigneeBreakdown() {
     return;
   }
 
+  const filtered = applyMeetingFilters(data?.meetings ?? []);
   const rule =
     data?.filterOptions?.routingRules?.find((r) => r.id === filters.routingRuleId) ??
     data?.meetings?.find((m) => m.routingRuleId === filters.routingRuleId)?.routingRule;
 
-  const websiteRows = applyMeetingFilters(data?.meetings ?? []).filter(
-    (m) => m.meetingType === "concierge",
-  );
-  const periodFilters = { ...filters, routingRuleId: "" };
-  const handoffRows = applyMeetingFilters(data?.meetings ?? [], periodFilters).filter(
-    (m) => m.meetingType === "handoff",
-  );
-  const chilicalRows = applyMeetingFilters(data?.meetings ?? [], periodFilters).filter(
-    (m) => m.meetingType === "chilical",
-  );
+  const websiteRows = filtered.filter((m) => m.meetingType === "concierge");
+  const handoffRows = filtered.filter((m) => m.meetingType === "handoff");
+  const chilicalRows = filtered.filter((m) => m.meetingType === "chilical");
 
   section.hidden = false;
   $("#ruleAssigneeHeading").textContent = "Rep breakdown for selected rule";
@@ -725,6 +751,7 @@ function renderReports() {
 
 function renderAll() {
   updateFilterSummary();
+  updateFilterControlState();
   renderKpis();
   renderReports();
   const onReportTab = REPORT_TABS.has(activeTab);
@@ -1065,9 +1092,12 @@ function init() {
                   ? "meetingType"
                   : "routingRuleId";
       filters[key] = e.target.value;
+      syncFilterDates(key);
       if (id === "filterMeetingType" && (e.target.value === "handoff" || e.target.value === "chilical")) {
         filters.routingRuleId = "";
+        filters.region = "";
         $("#filterRoutingRule").value = "";
+        $("#filterRegion").value = "";
       }
       renderAll();
     });

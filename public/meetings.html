@@ -89,8 +89,8 @@
               <option value="chilical">Rep calendar</option>
             </select>
           </label>
-          <label class="filter-field">
-            <span>Region</span>
+          <label class="filter-field" id="filterRegionField">
+            <span>Region (website)</span>
             <select id="filterRegion">
               <option value="">All regions</option>
             </select>
@@ -101,13 +101,16 @@
               <option value="">All reps</option>
             </select>
           </label>
-          <label class="filter-field filter-field-wide">
+          <label class="filter-field filter-field-wide" id="filterRoutingRuleField">
             <span>Website routing rule</span>
             <select id="filterRoutingRule">
               <option value="">All routing rules</option>
             </select>
           </label>
         </div>
+        <p class="filter-hint" id="filterHint">
+          Date and rep apply to all sources. Region and routing rule apply to <strong>website inbound only</strong> — handoffs and rep calendar are never dropped by those filters.
+        </p>
         <p class="filter-summary" id="filterSummary" hidden></p>
       </section>
 
