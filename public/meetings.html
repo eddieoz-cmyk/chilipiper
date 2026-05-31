@@ -55,14 +55,14 @@
             <span class="kpi-foot" id="kpiChilicalFoot">Direct Chili Piper link</span>
           </div>
           <div class="kpi-card success" data-kpi="status">
-            <span class="kpi-label">Active</span>
+            <span class="kpi-label">Scheduled</span>
             <span class="kpi-value" id="kpiScheduled">—</span>
-            <span class="kpi-foot" id="kpiScheduledFoot">Chili Piper export status</span>
+            <span class="kpi-foot" id="kpiScheduledFoot">Meeting end still in the future</span>
           </div>
           <div class="kpi-card" data-kpi="status">
             <span class="kpi-label">Held</span>
             <span class="kpi-value" id="kpiHeld">—</span>
-            <span class="kpi-foot" id="kpiHeldFoot">Marked completed in export</span>
+            <span class="kpi-foot" id="kpiHeldFoot">Completed or past end time</span>
           </div>
           <div class="kpi-card danger" data-kpi="status">
             <span class="kpi-label">No-show</span>
@@ -169,7 +169,7 @@
                 <th>Website</th>
                 <th>Rep calendar</th>
                 <th>Handoff</th>
-                <th>Active</th>
+                <th>Scheduled</th>
                 <th>No-show</th>
                 <th>Canceled</th>
               </tr>
@@ -250,8 +250,8 @@
         <h2 id="outcomesReportHeading" class="section-title">Meeting status</h2>
         <p class="chart-subtitle" id="outcomesReportSubtitle">—</p>
         <p class="panel-hint">
-          <strong>Active</strong> means Chili Piper has not marked the meeting Held or No-show — most past meetings stay Active in this export.
-          <strong>Held</strong> and <strong>No-show</strong> only appear when Chili Piper updates meeting status (not from Salesforce).
+          <strong>Held</strong> = marked completed in Chili Piper, or meeting end time has passed.
+          <strong>No-show</strong> always comes from the export. <strong>Scheduled</strong> = end time is still in the future.
         </p>
         <div class="outcome-bars" id="outcomeBars"></div>
         <div class="breakdown-grid" id="outcomeGrid"></div>
@@ -270,7 +270,7 @@
                 <th>BDR</th>
                 <th>AE</th>
                 <th>Total</th>
-                <th>Active</th>
+                <th>Scheduled</th>
                 <th>No-show</th>
                 <th>Canceled</th>
               </tr>
@@ -299,6 +299,7 @@
             <thead>
               <tr>
                 <th>Booked</th>
+                <th>Meeting</th>
                 <th>Company</th>
                 <th>Salesforce</th>
                 <th>Source</th>

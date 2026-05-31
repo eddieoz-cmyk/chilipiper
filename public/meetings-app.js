@@ -735,7 +735,7 @@ function renderOutcomesReport(reports) {
   $("#badgeOutcomes").textContent = String(total);
 
   const items = [
-    { key: "scheduled", label: "Active", cls: "success" },
+    { key: "scheduled", label: "Scheduled", cls: "success" },
     { key: "completed", label: "Held", cls: "success" },
     { key: "noshow", label: "No-show", cls: "danger" },
     { key: "canceled", label: "Canceled", cls: "danger" },
@@ -775,12 +775,12 @@ function renderHandoffsReport(reports) {
   if (!show) return;
 
   const h = reports.handoffs;
-  $("#handoffsReportSubtitle").textContent = `${h.total.toLocaleString()} handoffs · ${h.scheduled.toLocaleString()} active · ${h.noShow.toLocaleString()} no-show`;
+  $("#handoffsReportSubtitle").textContent = `${h.total.toLocaleString()} handoffs · ${h.scheduled.toLocaleString()} scheduled · ${h.noShow.toLocaleString()} no-show`;
   $("#badgeHandoffs").textContent = String(h.total);
 
   $("#handoffSummary").innerHTML = `
     <span>Total <strong>${h.total}</strong></span>
-    <span>Active <strong>${h.scheduled}</strong></span>
+    <span>Scheduled <strong>${h.scheduled}</strong></span>
     <span>No-show <strong>${h.noShow}</strong></span>
     <span>Canceled <strong>${h.canceled}</strong></span>
     <span>BDR→AE pairs <strong>${h.byPair.length}</strong></span>`;
@@ -875,8 +875,8 @@ function renderKpis() {
   $("#kpiConciergeCalendarFoot").textContent = `${formatRate(pct(m.byType.concierge.total, m.total))} of total`;
   $("#kpiHandoffFoot").textContent = `${formatRate(pct(m.byType.handoff.total, m.total))} of total`;
   $("#kpiChilicalFoot").textContent = `${formatRate(pct(m.byType.chilical?.total ?? 0, m.total))} of total`;
-  $("#kpiScheduledFoot").textContent = `${formatRate(m.rates.scheduledOfTotal)} not marked held/no-show`;
-  $("#kpiHeldFoot").textContent = `${formatRate(pct(m.held, m.total))} marked completed`;
+  $("#kpiScheduledFoot").textContent = `${formatRate(m.rates.scheduledOfTotal)} upcoming`;
+  $("#kpiHeldFoot").textContent = `${formatRate(pct(m.held, m.total))} held`;
   $("#kpiNoShowFoot").textContent = `${formatRate(m.rates.noShowOfTotal)} no-show rate`;
 
   $("#badgeAll").textContent = String(m.total);
@@ -908,7 +908,7 @@ function renderBreakdown() {
           <h3>${escapeHtml(title)}</h3>
           <dl class="breakdown-stats">
             <div><dt>Booked</dt><dd>${s.total.toLocaleString()}</dd></div>
-            <div><dt>Active</dt><dd>${s.scheduled.toLocaleString()}</dd></div>
+            <div><dt>Scheduled</dt><dd>${s.scheduled.toLocaleString()}</dd></div>
             <div><dt>Held</dt><dd>${(s.held ?? 0).toLocaleString()}</dd></div>
             <div><dt>No-show</dt><dd>${(s.noShow ?? 0).toLocaleString()}</dd></div>
             <div><dt>Canceled</dt><dd>${s.canceled.toLocaleString()}</dd></div>
@@ -939,6 +939,21 @@ function formatSalesforceLink(m) {
   if (!url) return "—";
   const kind = /\/Lead\//i.test(url) ? "Lead" : "Contact";
   return `<a class="sf-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="Open in Salesforce">${kind}</a>`;
+}
+
+function formatMeetingTime(iso) {
+  if (!iso) return "—";
+  const normalized = String(iso).includes("T")
+    ? iso.replace(" Z", "Z")
+    : iso.replace(" Z", "+00:00").replace(" ", "T");
+  const d = new Date(normalized);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 }
 
 function formatPerson(user) {
@@ -979,6 +994,7 @@ function renderTable() {
       (m) => `
     <tr>
       <td class="date-cell">${formatBookedDate(m.bookedAt)}</td>
+      <td class="date-cell">${formatMeetingTime(m.meetingStartTime ?? m.meetingAt)}</td>
       <td>${escapeHtml(m.company || m.title) || "—"}</td>
       <td class="sf-cell">${formatSalesforceLink(m)}</td>
       <td><span class="type-tag type-${escapeHtml(m.meetingType)}">${escapeHtml(meetingTypeShort(m.meetingType))}</span></td>
@@ -1009,17 +1025,18 @@ function renderStatusExportNote() {
   if (!el || !data?.meetings?.length) return;
 
   const all = data.meetings;
-  const held = all.filter((m) => m.outcome === "completed").length;
+  const exportHeld = all.filter((m) => m.happened && !m.heldInferred).length;
+  const inferredHeld = all.filter((m) => m.heldInferred).length;
   const noShow = all.filter((m) => m.noShow).length;
-  const active = all.filter((m) => m.outcome === "scheduled").length;
+  const scheduled = all.filter((m) => m.outcome === "scheduled").length;
 
-  if (active <= held + noShow + 10) {
+  if (!inferredHeld) {
     el.hidden = true;
     return;
   }
 
   el.hidden = false;
-  el.textContent = `Export status: ${held.toLocaleString()} held · ${noShow.toLocaleString()} no-show · ${active.toLocaleString()} active — most past meetings stay Active in Chili Piper and are not marked held.`;
+  el.textContent = `Held: ${exportHeld.toLocaleString()} from Chili Piper · ${inferredHeld.toLocaleString()} inferred from past meeting end time · ${noShow.toLocaleString()} no-show · ${scheduled.toLocaleString()} scheduled`;
 }
 
 function renderMeta(meetingsMeta) {
