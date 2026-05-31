@@ -21,7 +21,7 @@ export function meetingTypeShort(meetingType) {
 }
 
 export function statusLabel(status) {
-  if (status === "Active") return "Upcoming";
+  if (status === "Active") return "Active";
   if (status === "Canceled") return "Canceled";
   return status || "Unknown";
 }
@@ -33,13 +33,13 @@ export function extendedStatusLabel(extended, meetingStatus) {
   if (status === "Canceled" || ext === "Canceled") return "Canceled";
   if (ext === "NoShow") return "No-show";
   if (ext === "Completed") return "Held";
-  if (ext === "Active" || status === "Active") return "Upcoming";
+  if (ext === "Active" || status === "Active") return "Active";
   return ext || status || "Unknown";
 }
 
 export function outcomeLabel(outcome) {
   const labels = {
-    scheduled: "Upcoming",
+    scheduled: "Active",
     canceled: "Canceled",
     noshow: "No-show",
     completed: "Held",

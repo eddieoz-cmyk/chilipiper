@@ -735,7 +735,7 @@ function renderOutcomesReport(reports) {
   $("#badgeOutcomes").textContent = String(total);
 
   const items = [
-    { key: "scheduled", label: "Upcoming", cls: "success" },
+    { key: "scheduled", label: "Active", cls: "success" },
     { key: "completed", label: "Held", cls: "success" },
     { key: "noshow", label: "No-show", cls: "danger" },
     { key: "canceled", label: "Canceled", cls: "danger" },
@@ -775,12 +775,12 @@ function renderHandoffsReport(reports) {
   if (!show) return;
 
   const h = reports.handoffs;
-  $("#handoffsReportSubtitle").textContent = `${h.total.toLocaleString()} handoffs · ${h.scheduled.toLocaleString()} upcoming · ${h.noShow.toLocaleString()} no-show`;
+  $("#handoffsReportSubtitle").textContent = `${h.total.toLocaleString()} handoffs · ${h.scheduled.toLocaleString()} active · ${h.noShow.toLocaleString()} no-show`;
   $("#badgeHandoffs").textContent = String(h.total);
 
   $("#handoffSummary").innerHTML = `
     <span>Total <strong>${h.total}</strong></span>
-    <span>Upcoming <strong>${h.scheduled}</strong></span>
+    <span>Active <strong>${h.scheduled}</strong></span>
     <span>No-show <strong>${h.noShow}</strong></span>
     <span>Canceled <strong>${h.canceled}</strong></span>
     <span>BDR→AE pairs <strong>${h.byPair.length}</strong></span>`;
@@ -868,13 +868,15 @@ function renderKpis() {
   $("#kpiHandoff").textContent = String(m.byType.handoff.total);
   $("#kpiChilical").textContent = String(m.byType.chilical?.total ?? 0);
   $("#kpiScheduled").textContent = String(m.scheduled);
+  $("#kpiHeld").textContent = String(m.held);
   $("#kpiNoShow").textContent = String(m.noShow);
 
   $("#kpiCalendarFoot").textContent = filtered ? "Custom date range" : "This month (booking date)";
   $("#kpiConciergeCalendarFoot").textContent = `${formatRate(pct(m.byType.concierge.total, m.total))} of total`;
   $("#kpiHandoffFoot").textContent = `${formatRate(pct(m.byType.handoff.total, m.total))} of total`;
   $("#kpiChilicalFoot").textContent = `${formatRate(pct(m.byType.chilical?.total ?? 0, m.total))} of total`;
-  $("#kpiScheduledFoot").textContent = `${formatRate(m.rates.scheduledOfTotal)} still on calendar`;
+  $("#kpiScheduledFoot").textContent = `${formatRate(m.rates.scheduledOfTotal)} not marked held/no-show`;
+  $("#kpiHeldFoot").textContent = `${formatRate(pct(m.held, m.total))} marked completed`;
   $("#kpiNoShowFoot").textContent = `${formatRate(m.rates.noShowOfTotal)} no-show rate`;
 
   $("#badgeAll").textContent = String(m.total);
@@ -906,7 +908,7 @@ function renderBreakdown() {
           <h3>${escapeHtml(title)}</h3>
           <dl class="breakdown-stats">
             <div><dt>Booked</dt><dd>${s.total.toLocaleString()}</dd></div>
-            <div><dt>Upcoming</dt><dd>${s.scheduled.toLocaleString()}</dd></div>
+            <div><dt>Active</dt><dd>${s.scheduled.toLocaleString()}</dd></div>
             <div><dt>Held</dt><dd>${(s.held ?? 0).toLocaleString()}</dd></div>
             <div><dt>No-show</dt><dd>${(s.noShow ?? 0).toLocaleString()}</dd></div>
             <div><dt>Canceled</dt><dd>${s.canceled.toLocaleString()}</dd></div>
@@ -1002,6 +1004,24 @@ function setTab(tab) {
   renderAll();
 }
 
+function renderStatusExportNote() {
+  const el = $("#statusExportNote");
+  if (!el || !data?.meetings?.length) return;
+
+  const all = data.meetings;
+  const held = all.filter((m) => m.outcome === "completed").length;
+  const noShow = all.filter((m) => m.noShow).length;
+  const active = all.filter((m) => m.outcome === "scheduled").length;
+
+  if (active <= held + noShow + 10) {
+    el.hidden = true;
+    return;
+  }
+
+  el.hidden = false;
+  el.textContent = `Export status: ${held.toLocaleString()} held · ${noShow.toLocaleString()} no-show · ${active.toLocaleString()} active — most past meetings stay Active in Chili Piper and are not marked held.`;
+}
+
 function renderMeta(meetingsMeta) {
   const parts = [];
   const rowCount = data?.meetings?.length ?? data?.meta?.meetingRows;
@@ -1020,6 +1040,7 @@ function renderMeta(meetingsMeta) {
     parts.push(`Updated ${new Date(data.meta.fetchedAt).toLocaleString()}`);
   }
   $("#metaLine").textContent = parts.join(" · ") || "Sales meetings";
+  renderStatusExportNote();
 
   const sheetId = meetingsMeta?.spreadsheetId ?? data?.meta?.spreadsheetId;
   const link = $("#sheetLink");

@@ -36,14 +36,14 @@
 
 .kpi-row {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.75rem;
   margin-top: 1.25rem;
 }
 
-@media (max-width: 1200px) {
+@media (max-width: 1400px) {
   .kpi-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
@@ -665,6 +665,14 @@
   margin: 0.15rem 0 0;
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.status-export-note {
+  margin: 0.35rem 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--warning-text, #ad6800);
+  max-width: 52rem;
 }
 
 .status-pill {

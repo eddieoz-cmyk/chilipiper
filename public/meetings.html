@@ -23,6 +23,7 @@
               <h1>Sales meetings</h1>
               <p class="subtitle" id="metaLine">Loading…</p>
               <p class="subtitle period-line" id="periodLine" hidden></p>
+              <p class="subtitle status-export-note" id="statusExportNote" hidden></p>
             </div>
           </div>
           <div class="header-actions">
@@ -54,9 +55,14 @@
             <span class="kpi-foot" id="kpiChilicalFoot">Direct Chili Piper link</span>
           </div>
           <div class="kpi-card success" data-kpi="status">
-            <span class="kpi-label">Upcoming</span>
+            <span class="kpi-label">Active</span>
             <span class="kpi-value" id="kpiScheduled">—</span>
-            <span class="kpi-foot" id="kpiScheduledFoot">Still on calendar</span>
+            <span class="kpi-foot" id="kpiScheduledFoot">Chili Piper export status</span>
+          </div>
+          <div class="kpi-card" data-kpi="status">
+            <span class="kpi-label">Held</span>
+            <span class="kpi-value" id="kpiHeld">—</span>
+            <span class="kpi-foot" id="kpiHeldFoot">Marked completed in export</span>
           </div>
           <div class="kpi-card danger" data-kpi="status">
             <span class="kpi-label">No-show</span>
@@ -163,7 +169,7 @@
                 <th>Website</th>
                 <th>Rep calendar</th>
                 <th>Handoff</th>
-                <th>Upcoming</th>
+                <th>Active</th>
                 <th>No-show</th>
                 <th>Canceled</th>
               </tr>
@@ -244,7 +250,8 @@
         <h2 id="outcomesReportHeading" class="section-title">Meeting status</h2>
         <p class="chart-subtitle" id="outcomesReportSubtitle">—</p>
         <p class="panel-hint">
-          Upcoming = still on the calendar. Held = meeting completed. No-show = prospect did not attend. Canceled meetings appear when present in the export.
+          <strong>Active</strong> means Chili Piper has not marked the meeting Held or No-show — most past meetings stay Active in this export.
+          <strong>Held</strong> and <strong>No-show</strong> only appear when Chili Piper updates meeting status (not from Salesforce).
         </p>
         <div class="outcome-bars" id="outcomeBars"></div>
         <div class="breakdown-grid" id="outcomeGrid"></div>
@@ -263,7 +270,7 @@
                 <th>BDR</th>
                 <th>AE</th>
                 <th>Total</th>
-                <th>Upcoming</th>
+                <th>Active</th>
                 <th>No-show</th>
                 <th>Canceled</th>
               </tr>
