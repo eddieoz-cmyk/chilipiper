@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Website meetings dashboard</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="meetings.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header card">
+        <div class="header-top">
+          <div class="header-brand">
+            <span class="logo" aria-hidden="true">◉</span>
+            <div>
+              <h1>Website meetings</h1>
+              <p class="subtitle" id="metaLine">Loading…</p>
+              <p class="subtitle period-line" id="periodLine" hidden></p>
+            </div>
+          </div>
+          <div class="header-actions">
+            <a class="nav-dashboard-link" href="routing.html">Routing rules</a>
+            <a class="nav-dashboard-link" href="index.html">MQL journeys</a>
+            <button type="button" class="btn-refresh" id="refreshBtn">Refresh</button>
+          </div>
+        </div>
+
+        <div class="kpi-row" id="kpiRow">
+          <div class="kpi-card accent">
+            <span class="kpi-label">Submissions</span>
+            <span class="kpi-value" id="kpiTotal">—</span>
+            <span class="kpi-foot" id="kpiTotalFoot">Website form activity</span>
+          </div>
+          <div class="kpi-card success">
+            <span class="kpi-label">Meetings booked</span>
+            <span class="kpi-value" id="kpiBooked">—</span>
+            <span class="kpi-foot" id="kpiBookedFoot">Meeting scheduled</span>
+          </div>
+          <div class="kpi-card">
+            <span class="kpi-label">Not booked</span>
+            <span class="kpi-value" id="kpiNotBooked">—</span>
+            <span class="kpi-foot" id="kpiNotBookedFoot">Did not schedule</span>
+          </div>
+          <div class="kpi-card warning">
+            <span class="kpi-label">Disqualified</span>
+            <span class="kpi-value" id="kpiDisqualified">—</span>
+            <span class="kpi-foot" id="kpiDisqualifiedFoot">Routing disqualified</span>
+          </div>
+          <div class="kpi-card danger">
+            <span class="kpi-label">Canceled</span>
+            <span class="kpi-value" id="kpiCanceled">—</span>
+            <span class="kpi-foot" id="kpiCanceledFoot">Booking canceled</span>
+          </div>
+        </div>
+      </header>
+
+      <section class="filters card" aria-label="Filters">
+        <div class="filters-head">
+          <h2 class="section-title">Filters</h2>
+          <button type="button" class="btn-clear-filters" id="clearFiltersBtn" hidden>Reset to this month</button>
+        </div>
+        <div class="filters-grid filters-grid-website">
+          <label class="filter-field">
+            <span>From</span>
+            <input type="date" id="filterDateFrom" />
+          </label>
+          <label class="filter-field">
+            <span>To</span>
+            <input type="date" id="filterDateTo" />
+          </label>
+          <label class="filter-field">
+            <span>Status</span>
+            <select id="filterWebsiteStatus">
+              <option value="">All statuses</option>
+            </select>
+          </label>
+          <label class="filter-field">
+            <span>Country</span>
+            <select id="filterRegion">
+              <option value="">All countries</option>
+            </select>
+          </label>
+          <label class="filter-field filter-field-wide">
+            <span>Assigned BDR</span>
+            <select id="filterRep">
+              <option value="">All assignees</option>
+            </select>
+          </label>
+          <label class="filter-field filter-field-wide">
+            <span>Routing rule</span>
+            <select id="filterRoutingRule">
+              <option value="">All routing rules</option>
+            </select>
+          </label>
+        </div>
+        <p class="filter-hint" id="filterHint">Website concierge log — form submissions and booking outcomes from hibob.com.</p>
+        <p class="filter-summary" id="filterSummary" hidden></p>
+      </section>
+
+      <section class="chart-panel card" aria-labelledby="periodChartHeading">
+        <div class="chart-head">
+          <div>
+            <h2 id="periodChartHeading" class="section-title">Activity over time</h2>
+            <p class="chart-subtitle" id="chartSubtitle">—</p>
+          </div>
+          <label class="filter-field chart-granularity">
+            <span>Group by</span>
+            <select id="chartGranularity">
+              <option value="auto">Auto</option>
+              <option value="day">Daily</option>
+              <option value="week">Weekly</option>
+              <option value="month">Monthly</option>
+            </select>
+          </label>
+        </div>
+        <div class="chart-legend" id="chartLegend">
+          <span class="legend-item"><i class="swatch concierge"></i> Booked</span>
+          <span class="legend-item"><i class="swatch other"></i> Not booked</span>
+          <span class="legend-item"><i class="swatch handoff"></i> Disqualified</span>
+          <span class="legend-item"><i class="swatch chilical"></i> Canceled</span>
+        </div>
+        <div class="chart-wrap" id="chartWrap">
+          <svg id="periodChart" class="period-chart" viewBox="0 0 800 300" preserveAspectRatio="xMidYMid meet" role="img" aria-labelledby="periodChartHeading chartSubtitle"></svg>
+          <p class="empty-state" id="chartEmpty" hidden>No activity in this period.</p>
+        </div>
+      </section>
+
+      <section class="rule-assignees card" id="ruleAssigneeSection" hidden aria-labelledby="ruleAssigneeHeading">
+        <h2 id="ruleAssigneeHeading" class="section-title">Assignees for selected rule</h2>
+        <p class="chart-subtitle" id="ruleAssigneeSubtitle">—</p>
+        <div class="table-wrap">
+          <table class="assignee-table">
+            <thead>
+              <tr>
+                <th>Assignee</th>
+                <th>Total</th>
+                <th>Booked</th>
+                <th>Not booked</th>
+                <th>Disqualified</th>
+                <th>Canceled</th>
+              </tr>
+            </thead>
+            <tbody id="ruleAssigneeBody"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="ruleAssigneeEmpty" hidden>No rows for this rule in the selected period.</p>
+      </section>
+
+      <nav class="tabs card" role="tablist" aria-label="Views">
+        <button type="button" role="tab" class="tab active" data-tab="all" id="tabAll" aria-selected="true">
+          Overview <span class="tab-badge" id="badgeAll">—</span>
+        </button>
+        <button type="button" role="tab" class="tab" data-tab="live" id="tabLive" aria-selected="false">
+          By rule &amp; region <span class="tab-badge" id="badgeLive">—</span>
+        </button>
+        <button type="button" role="tab" class="tab" data-tab="bdr" id="tabBdr" aria-selected="false">
+          BDR by rule <span class="tab-badge" id="badgeBdr">—</span>
+        </button>
+        <button type="button" role="tab" class="tab" data-tab="outcomes" id="tabOutcomes" aria-selected="false">
+          Status funnel <span class="tab-badge" id="badgeOutcomes">—</span>
+        </button>
+      </nav>
+
+      <section class="report-panel card" id="liveReportPanel" hidden aria-labelledby="liveReportHeading">
+        <h2 id="liveReportHeading" class="section-title">By date, country, and rule</h2>
+        <p class="chart-subtitle" id="liveReportSubtitle">—</p>
+        <div class="report-grid">
+          <article class="report-block">
+            <h3>By date</h3>
+            <div class="table-wrap report-table-wrap">
+              <table class="assignee-table compact-table">
+                <thead><tr><th>Date</th><th>Count</th></tr></thead>
+                <tbody id="liveByDateBody"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="report-block">
+            <h3>By country</h3>
+            <div class="table-wrap report-table-wrap">
+              <table class="assignee-table compact-table">
+                <thead><tr><th>Country</th><th>Count</th></tr></thead>
+                <tbody id="liveByRegionBody"></tbody>
+              </table>
+            </div>
+          </article>
+          <article class="report-block report-block-wide">
+            <h3>By routing rule</h3>
+            <div class="table-wrap report-table-wrap">
+              <table class="assignee-table compact-table">
+                <thead><tr><th>Rule</th><th>Region</th><th>Total</th><th>Booked</th></tr></thead>
+                <tbody id="liveByRuleBody"></tbody>
+              </table>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="report-panel card" id="bdrReportPanel" hidden aria-labelledby="bdrReportHeading">
+        <h2 id="bdrReportHeading" class="section-title">Which BDR got each routing rule</h2>
+        <p class="chart-subtitle" id="bdrReportSubtitle">—</p>
+        <div id="bdrRuleBlocks"></div>
+        <p class="empty-state" id="bdrReportEmpty" hidden>No rows in this filter.</p>
+      </section>
+
+      <section class="report-panel card" id="outcomesReportPanel" hidden aria-labelledby="outcomesReportHeading">
+        <h2 id="outcomesReportHeading" class="section-title">Status funnel</h2>
+        <p class="chart-subtitle" id="outcomesReportSubtitle">—</p>
+        <div class="outcome-bars" id="outcomeBars"></div>
+        <div class="breakdown-grid" id="outcomeGrid"></div>
+      </section>
+
+      <section class="table-section card">
+        <div class="table-head">
+          <h2 class="section-title">Submission list</h2>
+          <label class="filter-check">
+            <input type="checkbox" id="bookedOnly" />
+            Booked only
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table class="meetings-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Company</th>
+                <th>Country</th>
+                <th>Routing rule</th>
+                <th>Assigned BDR</th>
+                <th>Status</th>
+                <th>Salesforce</th>
+              </tr>
+            </thead>
+            <tbody id="meetingsBody"></tbody>
+          </table>
+        </div>
+        <p class="empty-state" id="emptyState" hidden>No rows match these filters.</p>
+        <p class="panel-hint table-footnote">Showing up to 400 most recent rows. Salesforce opens the lead or contact in a new tab.</p>
+      </section>
+
+      <p class="setup-hint" id="setupHint" hidden></p>
+    </div>
+    <script type="module" src="meetings-app.js"></script>
+  </body>
+</html>
