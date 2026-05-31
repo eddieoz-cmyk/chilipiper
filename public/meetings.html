@@ -54,14 +54,14 @@
             <span class="kpi-foot" id="kpiChilicalFoot">Direct Chili Piper link</span>
           </div>
           <div class="kpi-card success">
-            <span class="kpi-label">Scheduled</span>
+            <span class="kpi-label">Upcoming</span>
             <span class="kpi-value" id="kpiScheduled">—</span>
-            <span class="kpi-foot" id="kpiScheduledFoot">On calendar, not canceled</span>
+            <span class="kpi-foot" id="kpiScheduledFoot">Still on calendar</span>
           </div>
           <div class="kpi-card danger">
-            <span class="kpi-label">Canceled</span>
-            <span class="kpi-value" id="kpiCanceled">—</span>
-            <span class="kpi-foot" id="kpiCanceledFoot">Cancel rate</span>
+            <span class="kpi-label">No-show</span>
+            <span class="kpi-value" id="kpiNoShow">—</span>
+            <span class="kpi-foot" id="kpiNoShowFoot">Did not attend</span>
           </div>
         </div>
       </header>
@@ -161,7 +161,8 @@
                 <th>Website</th>
                 <th>Rep calendar</th>
                 <th>Handoff</th>
-                <th>Scheduled</th>
+                <th>Upcoming</th>
+                <th>No-show</th>
                 <th>Canceled</th>
               </tr>
             </thead>
@@ -241,7 +242,7 @@
         <h2 id="outcomesReportHeading" class="section-title">Meeting status</h2>
         <p class="chart-subtitle" id="outcomesReportSubtitle">—</p>
         <p class="panel-hint">
-          Scheduled = still on the calendar. Canceled = meeting was canceled. This export does not include attended / no-show.
+          Upcoming = still on the calendar. Held = meeting completed. No-show = prospect did not attend. Canceled meetings appear when present in the export.
         </p>
         <div class="outcome-bars" id="outcomeBars"></div>
         <div class="breakdown-grid" id="outcomeGrid"></div>
@@ -260,7 +261,8 @@
                 <th>BDR</th>
                 <th>AE</th>
                 <th>Total</th>
-                <th>Scheduled</th>
+                <th>Upcoming</th>
+                <th>No-show</th>
                 <th>Canceled</th>
               </tr>
             </thead>
@@ -280,7 +282,7 @@
           <h2 class="section-title">Meeting list</h2>
           <label class="filter-check">
             <input type="checkbox" id="excludeCanceled" />
-            Hide canceled
+            Hide no-shows &amp; canceled
           </label>
         </div>
         <div class="table-wrap">
@@ -289,6 +291,7 @@
               <tr>
                 <th>Booked</th>
                 <th>Company</th>
+                <th>Salesforce</th>
                 <th>Source</th>
                 <th>Region</th>
                 <th>Routing rule</th>
@@ -301,7 +304,7 @@
           </table>
         </div>
         <p class="empty-state" id="emptyState" hidden>No meetings match these filters.</p>
-        <p class="panel-hint table-footnote">Showing up to 400 most recent rows. BDR = assigned on website route. AE = meeting host.</p>
+        <p class="panel-hint table-footnote">Showing up to 400 most recent rows. Salesforce opens the lead or contact in a new tab. BDR = assigned on website route. AE = meeting host.</p>
       </section>
 
       <p class="setup-hint" id="setupHint" hidden></p>

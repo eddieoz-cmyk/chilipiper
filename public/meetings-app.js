@@ -9,6 +9,7 @@ import {
   formatPeriodLabel,
   meetingTypeLabel,
   meetingTypeShort,
+  outcomeLabel,
   statusLabel,
 } from "./sales-meeting-labels.mjs";
 
@@ -55,15 +56,20 @@ function pct(n, d) {
 function summarizeType(allMeetings, meetingType) {
   const rows = allMeetings.filter((m) => m.meetingType === meetingType);
   const total = rows.length;
-  const scheduled = rows.filter((m) => m.isScheduled).length;
+  const scheduled = rows.filter((m) => m.outcome === "scheduled").length;
+  const held = rows.filter((m) => m.outcome === "completed").length;
+  const noShow = rows.filter((m) => m.noShow).length;
   const canceled = rows.filter((m) => m.canceled).length;
   return {
     meetingType,
     total,
     scheduled,
+    held,
+    noShow,
     canceled,
     rates: {
       scheduledOfTotal: pct(scheduled, total),
+      noShowOfTotal: pct(noShow, total),
       canceledOfTotal: pct(canceled, total),
     },
   };
@@ -73,19 +79,24 @@ function computeMeetingsMetrics(allMeetings) {
   const concierge = summarizeType(allMeetings, "concierge");
   const handoff = summarizeType(allMeetings, "handoff");
   const chilical = summarizeType(allMeetings, "chilical");
-  const scheduled = allMeetings.filter((m) => m.isScheduled).length;
+  const scheduled = allMeetings.filter((m) => m.outcome === "scheduled").length;
+  const held = allMeetings.filter((m) => m.outcome === "completed").length;
+  const noShow = allMeetings.filter((m) => m.noShow).length;
   const canceled = allMeetings.filter((m) => m.canceled).length;
   const total = allMeetings.length;
 
   return {
     total,
     scheduled,
+    held,
+    noShow,
     canceled,
     bookedLive: concierge.total,
     handoffToAe: handoff.total,
     chilical: chilical.total,
     rates: {
       scheduledOfTotal: pct(scheduled, total),
+      noShowOfTotal: pct(noShow, total),
       canceledOfTotal: pct(canceled, total),
     },
     byType: { concierge, handoff, chilical },
@@ -111,7 +122,7 @@ function applyMeetingFilters(meetings, overrideFilters) {
 function getFilteredMeetings() {
   let rows = applyMeetingFilters(data?.meetings ?? []);
   if ($("#excludeCanceled")?.checked) {
-    rows = rows.filter((m) => !m.canceled && (m.isScheduled ?? m.status === "Active"));
+    rows = rows.filter((m) => !m.canceled && !m.noShow);
   }
   return rows;
 }
@@ -502,6 +513,7 @@ function renderRuleAssigneeBreakdown() {
         chilical: 0,
         handoff: 0,
         scheduled: 0,
+        noShow: 0,
         canceled: 0,
       });
     }
@@ -512,7 +524,8 @@ function renderRuleAssigneeBreakdown() {
     const r = ensureRep(m);
     r.total++;
     r.concierge++;
-    if (m.isScheduled) r.scheduled++;
+    if (m.outcome === "scheduled") r.scheduled++;
+    if (m.noShow) r.noShow++;
     if (m.canceled) r.canceled++;
   }
 
@@ -520,7 +533,8 @@ function renderRuleAssigneeBreakdown() {
     const r = ensureRep(m);
     r.total++;
     r.handoff++;
-    if (m.isScheduled) r.scheduled++;
+    if (m.outcome === "scheduled") r.scheduled++;
+    if (m.noShow) r.noShow++;
     if (m.canceled) r.canceled++;
   }
 
@@ -528,7 +542,8 @@ function renderRuleAssigneeBreakdown() {
     const r = ensureRep(m);
     r.total++;
     r.chilical++;
-    if (m.isScheduled) r.scheduled++;
+    if (m.outcome === "scheduled") r.scheduled++;
+    if (m.noShow) r.noShow++;
     if (m.canceled) r.canceled++;
   }
 
@@ -544,6 +559,7 @@ function renderRuleAssigneeBreakdown() {
       <td class="num">${r.chilical}</td>
       <td class="num">${r.handoff}</td>
       <td class="num">${r.scheduled}</td>
+      <td class="num">${r.noShow}</td>
       <td class="num">${r.canceled}</td>
     </tr>
   `,
@@ -631,16 +647,16 @@ function renderOutcomesReport(reports) {
   $("#badgeOutcomes").textContent = String(total);
 
   const items = [
-    { key: "scheduled", label: "Scheduled", cls: "success" },
+    { key: "scheduled", label: "Upcoming", cls: "success" },
+    { key: "completed", label: "Held", cls: "success" },
+    { key: "noshow", label: "No-show", cls: "danger" },
     { key: "canceled", label: "Canceled", cls: "danger" },
     { key: "rescheduled", label: "Rescheduled", cls: "warning" },
-    { key: "noshow", label: "No-show", cls: "muted" },
-    { key: "completed", label: "Completed", cls: "success" },
     { key: "unknown", label: "Other", cls: "other" },
   ];
 
   $("#outcomeBars").innerHTML = items
-    .filter((i) => counts[i.key] > 0 || i.key === "scheduled" || i.key === "canceled")
+    .filter((i) => (counts[i.key] ?? 0) > 0)
     .map((i) => {
       const n = counts[i.key] ?? 0;
       const pctVal = total ? Math.round((n / total) * 1000) / 10 : 0;
@@ -671,12 +687,13 @@ function renderHandoffsReport(reports) {
   if (!show) return;
 
   const h = reports.handoffs;
-  $("#handoffsReportSubtitle").textContent = `${h.total.toLocaleString()} handoffs · ${h.scheduled.toLocaleString()} scheduled · ${h.canceled.toLocaleString()} canceled`;
+  $("#handoffsReportSubtitle").textContent = `${h.total.toLocaleString()} handoffs · ${h.scheduled.toLocaleString()} upcoming · ${h.noShow.toLocaleString()} no-show`;
   $("#badgeHandoffs").textContent = String(h.total);
 
   $("#handoffSummary").innerHTML = `
     <span>Total <strong>${h.total}</strong></span>
-    <span>Scheduled <strong>${h.scheduled}</strong></span>
+    <span>Upcoming <strong>${h.scheduled}</strong></span>
+    <span>No-show <strong>${h.noShow}</strong></span>
     <span>Canceled <strong>${h.canceled}</strong></span>
     <span>BDR→AE pairs <strong>${h.byPair.length}</strong></span>`;
 
@@ -688,6 +705,7 @@ function renderHandoffsReport(reports) {
       <td>${escapeHtml(p.aeName)}</td>
       <td class="num">${p.total}</td>
       <td class="num">${p.scheduled}</td>
+      <td class="num">${p.noShow ?? 0}</td>
       <td class="num">${p.canceled}</td>
     </tr>`,
     )
@@ -747,16 +765,14 @@ function renderKpis() {
   $("#kpiHandoff").textContent = String(m.byType.handoff.total);
   $("#kpiChilical").textContent = String(m.byType.chilical?.total ?? 0);
   $("#kpiScheduled").textContent = String(m.scheduled);
-
-  const canceled = m.canceled;
-  $("#kpiCanceled").textContent = String(canceled);
-  $("#kpiCanceledFoot").textContent = `${formatRate(m.rates.canceledOfTotal)} cancel rate`;
+  $("#kpiNoShow").textContent = String(m.noShow);
 
   $("#kpiCalendarFoot").textContent = filtered ? "Custom date range" : "This month (booking date)";
   $("#kpiConciergeCalendarFoot").textContent = `${formatRate(pct(m.byType.concierge.total, m.total))} of total`;
   $("#kpiHandoffFoot").textContent = `${formatRate(pct(m.byType.handoff.total, m.total))} of total`;
   $("#kpiChilicalFoot").textContent = `${formatRate(pct(m.byType.chilical?.total ?? 0, m.total))} of total`;
   $("#kpiScheduledFoot").textContent = `${formatRate(m.rates.scheduledOfTotal)} still on calendar`;
+  $("#kpiNoShowFoot").textContent = `${formatRate(m.rates.noShowOfTotal)} no-show rate`;
 
   $("#badgeAll").textContent = String(m.total);
 
@@ -786,9 +802,10 @@ function renderBreakdown() {
           <h3>${escapeHtml(title)}</h3>
           <dl class="breakdown-stats">
             <div><dt>Booked</dt><dd>${s.total.toLocaleString()}</dd></div>
-            <div><dt>Scheduled</dt><dd>${s.scheduled.toLocaleString()}</dd></div>
+            <div><dt>Upcoming</dt><dd>${s.scheduled.toLocaleString()}</dd></div>
+            <div><dt>Held</dt><dd>${(s.held ?? 0).toLocaleString()}</dd></div>
+            <div><dt>No-show</dt><dd>${(s.noShow ?? 0).toLocaleString()}</dd></div>
             <div><dt>Canceled</dt><dd>${s.canceled.toLocaleString()}</dd></div>
-            <div><dt>Cancel rate</dt><dd>${formatRate(s.rates.canceledOfTotal)}</dd></div>
           </dl>
         </article>
       `;
@@ -803,9 +820,19 @@ function filteredMeetingsForTable() {
 }
 
 function statusPill(m) {
-  const label = m.statusLabel ?? statusLabel(m.status);
-  const cls = m.canceled ? "canceled" : "scheduled";
+  const label = m.statusLabel ?? outcomeLabel(m.outcome) ?? statusLabel(m.status);
+  let cls = "scheduled";
+  if (m.canceled) cls = "canceled";
+  else if (m.noShow) cls = "noshow";
+  else if (m.happened || m.outcome === "completed") cls = "completed";
   return `<span class="status-pill ${cls}">${escapeHtml(label)}</span>`;
+}
+
+function formatSalesforceLink(m) {
+  const url = m.crmContactUrl;
+  if (!url) return "—";
+  const kind = /\/Lead\//i.test(url) ? "Lead" : "Contact";
+  return `<a class="sf-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="Open in Salesforce">${kind}</a>`;
 }
 
 function formatPerson(user) {
@@ -847,6 +874,7 @@ function renderTable() {
     <tr>
       <td class="date-cell">${formatBookedDate(m.bookedAt)}</td>
       <td>${escapeHtml(m.company || m.title) || "—"}</td>
+      <td class="sf-cell">${formatSalesforceLink(m)}</td>
       <td><span class="type-tag type-${escapeHtml(m.meetingType)}">${escapeHtml(meetingTypeShort(m.meetingType))}</span></td>
       <td>${escapeHtml(m.region) || "—"}</td>
       <td class="rule-cell">${formatRoutingRule(m)}</td>

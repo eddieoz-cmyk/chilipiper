@@ -192,6 +192,7 @@ export function computeHandoffReport(meetings) {
         aeEmail: ae.email ?? m.ae,
         total: 0,
         scheduled: 0,
+        noShow: 0,
         canceled: 0,
         fromRouter: 0,
         fromOwnership: 0,
@@ -200,7 +201,8 @@ export function computeHandoffReport(meetings) {
     }
     const p = pairs.get(pairKey);
     p.total++;
-    if (m.isScheduled) p.scheduled++;
+    if (m.outcome === "scheduled") p.scheduled++;
+    if (m.noShow) p.noShow++;
     if (m.canceled) p.canceled++;
     const origin = m.handoffRouteOrigin ?? "unlinked";
     if (origin === "router") p.fromRouter++;
@@ -225,7 +227,8 @@ export function computeHandoffReport(meetings) {
 
   return {
     total: handoffs.length,
-    scheduled: handoffs.filter((m) => m.isScheduled).length,
+    scheduled: handoffs.filter((m) => m.outcome === "scheduled").length,
+    noShow: handoffs.filter((m) => m.noShow).length,
     canceled: handoffs.filter((m) => m.canceled).length,
     byPair: [...pairs.values()].sort((a, b) => b.total - a.total),
     rows: rows.sort((a, b) => String(b.bookedAt).localeCompare(String(a.bookedAt))),

@@ -668,9 +668,38 @@
   color: var(--success-text, #1b5e20);
 }
 
-.status-pill.canceled {
+.status-pill.completed {
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+
+.status-pill.noshow {
   background: var(--danger-bg, #ffebee);
   color: var(--danger-text, #b71c1c);
+}
+
+.status-pill.canceled {
+  background: #fce4ec;
+  color: #880e4f;
+}
+
+.sf-link {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  text-decoration: none;
+  padding: 0.1rem 0.45rem;
+  border-radius: 4px;
+  background: var(--accent-bg, rgba(0, 102, 204, 0.08));
+}
+
+.sf-link:hover {
+  text-decoration: underline;
+}
+
+.sf-cell {
+  white-space: nowrap;
 }
 
 .table-footnote {
