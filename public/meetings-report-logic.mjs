@@ -1,4 +1,4 @@
-/** Client + server shared report aggregations (meetings.csv = source of truth). */
+/** Client + server shared report aggregations for website meetings. */
 
 function trim(v) {
   return (v ?? "").trim();
@@ -18,8 +18,8 @@ export function repKeysForMeeting(m) {
   const keys = new Set();
   if (m.assignedUserId) keys.add(`id:${m.assignedUserId}`);
   if (m.assignedUser?.id) keys.add(`id:${m.assignedUser.id}`);
-  if (m.hostUser?.id) keys.add(`id:${m.hostUser.id}`);
-  if (m.bookerUser?.id) keys.add(`id:${m.bookerUser.id}`);
+  if (m.assignedUser?.name) keys.add(`name:${m.assignedUser.name}`);
+  if (m.assignedUserName) keys.add(`name:${m.assignedUserName}`);
   const primary = primaryRepKey(m);
   if (primary !== "unknown") keys.add(primary);
   return [...keys];
@@ -30,24 +30,21 @@ export function meetingMatchesRep(m, repKey) {
   return repKeysForMeeting(m).includes(repKey);
 }
 
-/** BDR / owning rep for dashboards — handoffs credit the BDR, not the AE host. */
 export function primaryRepPerson(m) {
-  if (m.meetingType === "handoff") return m.bookerUser ?? null;
-  if (m.meetingType === "concierge") return m.assignedUser ?? null;
-  if (m.meetingType === "chilical") return m.hostUser ?? m.bookerUser ?? null;
-  return m.assignedUser ?? m.hostUser ?? m.bookerUser ?? null;
+  return m.assignedUser ?? null;
 }
 
 export function primaryRepKey(m) {
   const person = primaryRepPerson(m);
   if (person?.id) return `id:${person.id}`;
-  if (person?.email) return `email:${person.email}`;
+  if (person?.name) return `name:${person.name}`;
+  if (m.assignedUserName) return `name:${m.assignedUserName}`;
   return "unknown";
 }
 
 export function primaryRepName(m) {
   const person = primaryRepPerson(m);
-  return person?.name ?? "Unknown";
+  return person?.name ?? m.assignedUserName ?? "Unknown";
 }
 
 export function websiteFilterActive(filters) {
@@ -69,27 +66,6 @@ function applyDateFilter(rows, filters) {
   });
 }
 
-function matchesConciergeWebsiteFilter(m, filters) {
-  if (m.meetingType !== "concierge") return false;
-  if (filters.routingRuleId && m.routingRuleId !== filters.routingRuleId) return false;
-  if (filters.region && m.region !== filters.region) return false;
-  return true;
-}
-
-/** Reps assigned on website rows matching the active region / routing rule (same date window). */
-export function buildWebsiteScopeRepKeys(meetings, filters) {
-  if (!websiteFilterActive(filters)) return null;
-  const dated = applyDateFilter(meetings ?? [], filters);
-  const keys = new Set();
-  for (const m of dated) {
-    if (!matchesConciergeWebsiteFilter(m, filters)) continue;
-    const pk = primaryRepKey(m);
-    if (pk !== "unknown") keys.add(pk);
-  }
-  return keys;
-}
-
-/** Reps visible in the current filter context (for rep dropdown). */
 export function buildRepsFromMeetings(meetings) {
   const reps = new Map();
 
@@ -98,15 +74,15 @@ export function buildRepsFromMeetings(meetings) {
     reps.set(key, {
       key,
       id: person?.id ?? (key.startsWith("id:") ? key.slice(3) : null),
-      name: person?.name ?? key.replace(/^id:|^email:/, ""),
+      name: person?.name ?? key.replace(/^id:|^name:/, ""),
       email: person?.email ?? null,
     });
   }
 
   for (const m of meetings ?? []) {
     if (m.assignedUser?.id) addPerson(`id:${m.assignedUser.id}`, m.assignedUser);
-    if (m.bookerUser?.id) addPerson(`id:${m.bookerUser.id}`, m.bookerUser);
-    if (m.hostUser?.id) addPerson(`id:${m.hostUser.id}`, m.hostUser);
+    if (m.assignedUser?.name) addPerson(`name:${m.assignedUser.name}`, m.assignedUser);
+    if (m.assignedUserName) addPerson(`name:${m.assignedUserName}`, { name: m.assignedUserName });
     const pk = primaryRepKey(m);
     if (pk !== "unknown") addPerson(pk, primaryRepPerson(m));
   }
@@ -116,29 +92,16 @@ export function buildRepsFromMeetings(meetings) {
 
 export function applyMeetingFilters(meetings, filters) {
   let rows = applyDateFilter(meetings ?? [], filters);
-  const websiteActive = websiteFilterActive(filters);
-  const skipWebsiteScope =
-    filters.meetingType === "handoff" || filters.meetingType === "chilical";
-  const scopeKeys =
-    websiteActive && !skipWebsiteScope
-      ? buildWebsiteScopeRepKeys(meetings ?? [], filters)
-      : null;
 
-  if (filters.meetingType) {
-    rows = rows.filter((m) => m.meetingType === filters.meetingType);
+  if (filters.websiteStatus) {
+    rows = rows.filter((m) => m.websiteStatus === filters.websiteStatus);
   }
-
-  if (websiteActive && !skipWebsiteScope) {
-    rows = rows.filter((m) => {
-      if (m.meetingType === "concierge") {
-        return matchesConciergeWebsiteFilter(m, filters);
-      }
-      if (filters.meetingType === "concierge") return false;
-      if (!scopeKeys?.size) return false;
-      return scopeKeys.has(primaryRepKey(m));
-    });
+  if (filters.region) {
+    rows = rows.filter((m) => m.region === filters.region || m.country === filters.region);
   }
-
+  if (filters.routingRuleId) {
+    rows = rows.filter((m) => m.routingRuleId === filters.routingRuleId);
+  }
   if (filters.repKey) {
     rows = rows.filter((m) => meetingMatchesRep(m, filters.repKey));
   }
@@ -155,26 +118,25 @@ function inc(map, key, n = 1) {
   map.set(key, (map.get(key) ?? 0) + n);
 }
 
-function repLabel(person, fallbackEmail) {
-  return person?.name ?? person?.email ?? fallbackEmail ?? "Unknown";
+function repLabel(person, fallbackName) {
+  return person?.name ?? fallbackName ?? "Unknown";
 }
 
-/** Website inbound meetings booked in the selected period. */
 export function computeLiveBookedReport(meetings, dateField = "bookedAt") {
-  const live = meetings.filter((m) => m.meetingType === "concierge");
+  const live = meetings;
   const byDate = new Map();
   const byRegion = new Map();
   const byRule = new Map();
 
   for (const m of live) {
     inc(byDate, bucketDate(m, dateField));
-    inc(byRegion, m.region ?? m.routingRuleRegion ?? "Unknown");
+    inc(byRegion, m.region ?? m.country ?? "Unknown");
     const ruleKey = m.routingRuleId ?? "unknown";
     if (!byRule.has(ruleKey)) {
       byRule.set(ruleKey, {
         ruleId: m.routingRuleId,
         ruleName: m.routingRuleName ?? "Unknown rule",
-        region: m.region ?? m.routingRuleRegion,
+        region: m.region ?? m.routingRuleRegion ?? m.country,
         count: 0,
       });
     }
@@ -183,42 +145,46 @@ export function computeLiveBookedReport(meetings, dateField = "bookedAt") {
 
   return {
     total: live.length,
+    booked: live.filter((m) => m.booked).length,
     byDate: [...byDate.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([date, count]) => ({ date, count })),
     byRegion: [...byRegion.entries()].sort((a, b) => b[1] - a[1]).map(([region, count]) => ({ region, count })),
     byRule: [...byRule.values()].sort((a, b) => b.count - a.count),
   };
 }
 
-/** Per routing rule: how many meetings each BDR/assignee received (from website log assignee or booker). */
 export function computeRuleBdrDistribution(meetings) {
   const byRule = new Map();
 
   for (const m of meetings) {
-    if (!m.routingRuleId) continue;
-    const ruleKey = m.routingRuleId;
+    if (!m.routingRuleId && !m.routingRuleName) continue;
+    const ruleKey = m.routingRuleId ?? `name:${m.routingRuleName}`;
     if (!byRule.has(ruleKey)) {
       byRule.set(ruleKey, {
         ruleId: m.routingRuleId,
         ruleName: m.routingRuleName ?? "Unknown",
-        region: m.region ?? m.routingRuleRegion,
+        region: m.region ?? m.routingRuleRegion ?? m.country,
         total: 0,
+        booked: 0,
         bdrs: new Map(),
       });
     }
     const rule = byRule.get(ruleKey);
     rule.total++;
+    if (m.booked) rule.booked++;
 
-    const bdrPerson = primaryRepPerson(m) ?? m.bookerUser;
-    const bdrKey = bdrPerson?.id ? `id:${bdrPerson.id}` : bdrPerson?.email ? `email:${bdrPerson.email}` : "unknown";
+    const bdrPerson = primaryRepPerson(m);
+    const bdrKey = primaryRepKey(m);
     if (!rule.bdrs.has(bdrKey)) {
       rule.bdrs.set(bdrKey, {
         key: bdrKey,
-        name: repLabel(bdrPerson, m.bdr),
-        email: bdrPerson?.email ?? m.bdr ?? null,
+        name: repLabel(bdrPerson, m.assignedUserName),
         count: 0,
+        booked: 0,
       });
     }
-    rule.bdrs.get(bdrKey).count++;
+    const bdr = rule.bdrs.get(bdrKey);
+    bdr.count++;
+    if (m.booked) bdr.booked++;
   }
 
   return [...byRule.values()]
@@ -230,9 +196,17 @@ export function computeRuleBdrDistribution(meetings) {
 }
 
 export function computeOutcomeReport(meetings) {
-  const counts = { scheduled: 0, canceled: 0, rescheduled: 0, noshow: 0, completed: 0, unknown: 0 };
+  const counts = {
+    scheduled: 0,
+    not_scheduled: 0,
+    disqualified: 0,
+    canceled: 0,
+    in_progress: 0,
+    failed: 0,
+    unknown: 0,
+  };
   for (const m of meetings) {
-    const o = m.outcome ?? (m.canceled ? "canceled" : m.isScheduled ? "scheduled" : "unknown");
+    const o = m.outcome ?? "unknown";
     if (counts[o] != null) counts[o]++;
     else counts.unknown++;
   }
@@ -240,71 +214,10 @@ export function computeOutcomeReport(meetings) {
   return { total, counts };
 }
 
-export function computeHandoffReport(meetings) {
-  const handoffs = meetings.filter((m) => m.meetingType === "handoff");
-  const pairs = new Map();
-  const rows = [];
-
-  for (const m of handoffs) {
-    const bdr = m.bookerUser ?? { name: null, email: m.bdr };
-    const ae = m.hostUser ?? { name: null, email: m.ae };
-    const pairKey = `${bdr.email ?? bdr.name}::${ae.email ?? ae.name}`;
-    if (!pairs.has(pairKey)) {
-      pairs.set(pairKey, {
-        bdrName: repLabel(bdr, m.bdr),
-        bdrEmail: bdr.email ?? m.bdr,
-        aeName: repLabel(ae, m.ae),
-        aeEmail: ae.email ?? m.ae,
-        total: 0,
-        scheduled: 0,
-        noShow: 0,
-        canceled: 0,
-        fromRouter: 0,
-        fromOwnership: 0,
-        unlinked: 0,
-      });
-    }
-    const p = pairs.get(pairKey);
-    p.total++;
-    if (m.outcome === "scheduled") p.scheduled++;
-    if (m.noShow) p.noShow++;
-    if (m.canceled) p.canceled++;
-    const origin = m.handoffRouteOrigin ?? "unlinked";
-    if (origin === "router") p.fromRouter++;
-    else if (origin === "ownership") p.fromOwnership++;
-    else p.unlinked++;
-
-    rows.push({
-      id: m.id,
-      email: m.email,
-      company: m.company ?? m.title,
-      bdrName: repLabel(bdr, m.bdr),
-      bdrEmail: bdr.email ?? m.bdr,
-      aeName: repLabel(ae, m.ae),
-      aeEmail: ae.email ?? m.ae,
-      outcome: m.outcome,
-      happened: m.happened,
-      priorRule: m.priorRoutingRuleName ?? m.routingRuleName,
-      routeOrigin: m.handoffRouteOrigin,
-      meetingAt: m.meetingAt,
-    });
-  }
-
-  return {
-    total: handoffs.length,
-    scheduled: handoffs.filter((m) => m.outcome === "scheduled").length,
-    noShow: handoffs.filter((m) => m.noShow).length,
-    canceled: handoffs.filter((m) => m.canceled).length,
-    byPair: [...pairs.values()].sort((a, b) => b.total - a.total),
-    rows: rows.sort((a, b) => String(b.bookedAt).localeCompare(String(a.bookedAt))),
-  };
-}
-
 export function computeMeetingsReports(meetings, dateField = "bookedAt") {
   return {
     liveBooked: computeLiveBookedReport(meetings, dateField),
     ruleBdrDistribution: computeRuleBdrDistribution(meetings),
     outcomes: computeOutcomeReport(meetings),
-    handoffs: computeHandoffReport(meetings),
   };
 }

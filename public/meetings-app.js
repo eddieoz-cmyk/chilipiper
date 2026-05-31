@@ -4,21 +4,14 @@ import {
   computeMeetingsReports,
   primaryRepKey,
   primaryRepName,
-  websiteFilterActive,
 } from "./meetings-report-logic.mjs";
-import {
-  formatBookedDate,
-  formatPeriodLabel,
-  meetingTypeLabel,
-  meetingTypeShort,
-  outcomeLabel,
-  statusLabel,
-} from "./sales-meeting-labels.mjs";
+import { formatBookedDate, formatPeriodLabel } from "./sales-meeting-labels.mjs";
 
 const $ = (sel) => document.querySelector(sel);
-
 let data = null;
 let activeTab = "all";
+let chartGranularity = "auto";
+const REPORT_TABS = new Set(["live", "bdr", "outcomes"]);
 const filters = {
   dateFrom: "",
   dateTo: "",
@@ -26,82 +19,49 @@ const filters = {
   repKey: "",
   routingRuleId: "",
   region: "",
-  meetingType: "",
+  websiteStatus: "",
 };
 
-let chartGranularity = "auto";
-
-function escapeHtml(s) {
-  return String(s ?? "")
+const escapeHtml = (s) =>
+  String(s ?? "")
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
-}
-
-function formatRate(rate) {
-  if (rate == null) return "—";
-  return `${rate}%`;
-}
-
-function parseMeetingDate(value) {
-  if (!value) return null;
-  const d = new Date(value);
+const formatRate = (rate) => (rate == null ? "—" : `${rate}%`);
+const pct = (n, d) => (!d ? null : Math.round((n / d) * 1000) / 10);
+const parseMeetingDate = (v) => {
+  if (!v) return null;
+  const d = new Date(v);
   return Number.isNaN(d.getTime()) ? null : d;
-}
+};
+const applyMeetingFilters = (meetings, f) => applyFilters(meetings, f ?? filters);
+const getFilteredForReports = () => applyMeetingFilters(data?.meetings ?? []);
+const getFilteredMeetings = () => {
+  let rows = getFilteredForReports();
+  if ($("#bookedOnly")?.checked) rows = rows.filter((m) => m.booked);
+  return rows;
+};
 
-function pct(n, d) {
-  if (!d) return null;
-  return Math.round((n / d) * 1000) / 10;
-}
-
-function summarizeType(allMeetings, meetingType) {
-  const rows = allMeetings.filter((m) => m.meetingType === meetingType);
-  const total = rows.length;
-  const scheduled = rows.filter((m) => m.outcome === "scheduled").length;
-  const held = rows.filter((m) => m.outcome === "completed").length;
-  const noShow = rows.filter((m) => m.noShow).length;
-  const canceled = rows.filter((m) => m.canceled).length;
-  return {
-    meetingType,
-    total,
-    scheduled,
-    held,
-    noShow,
-    canceled,
-    rates: {
-      scheduledOfTotal: pct(scheduled, total),
-      noShowOfTotal: pct(noShow, total),
-      canceledOfTotal: pct(canceled, total),
-    },
-  };
-}
-
-function computeMeetingsMetrics(allMeetings) {
-  const concierge = summarizeType(allMeetings, "concierge");
-  const handoff = summarizeType(allMeetings, "handoff");
-  const chilical = summarizeType(allMeetings, "chilical");
-  const scheduled = allMeetings.filter((m) => m.outcome === "scheduled").length;
-  const held = allMeetings.filter((m) => m.outcome === "completed").length;
-  const noShow = allMeetings.filter((m) => m.noShow).length;
-  const canceled = allMeetings.filter((m) => m.canceled).length;
-  const total = allMeetings.length;
-
+function computeWebsiteMetrics(meetings) {
+  const total = meetings.length;
+  const count = (o) => meetings.filter((m) => m.outcome === o).length;
+  const booked = count("scheduled");
+  const notBooked = count("not_scheduled");
+  const disqualified = count("disqualified");
+  const canceled = count("canceled");
   return {
     total,
-    scheduled,
-    held,
-    noShow,
+    booked,
+    notBooked,
+    disqualified,
     canceled,
-    bookedLive: concierge.total,
-    handoffToAe: handoff.total,
-    chilical: chilical.total,
     rates: {
-      scheduledOfTotal: pct(scheduled, total),
-      noShowOfTotal: pct(noShow, total),
+      bookedOfTotal: pct(booked, total),
+      notBookedOfTotal: pct(notBooked, total),
+      disqualifiedOfTotal: pct(disqualified, total),
       canceledOfTotal: pct(canceled, total),
     },
-    byType: { concierge, handoff, chilical },
   };
 }
 
@@ -110,102 +70,35 @@ function filtersActive() {
   return (
     (filters.dateFrom && filters.dateFrom !== opts?.dateFrom) ||
     (filters.dateTo && filters.dateTo !== opts?.dateTo) ||
-    Boolean(filters.repKey) ||
-    Boolean(filters.routingRuleId) ||
-    Boolean(filters.region) ||
-    Boolean(filters.meetingType)
+    Boolean(filters.repKey || filters.routingRuleId || filters.region || filters.websiteStatus)
   );
-}
-
-function applyMeetingFilters(meetings, overrideFilters) {
-  return applyFilters(meetings, overrideFilters ?? filters);
-}
-
-function getFilteredMeetings() {
-  let rows = applyMeetingFilters(data?.meetings ?? []);
-  if ($("#excludeCanceled")?.checked) {
-    rows = rows.filter((m) => !m.canceled && !m.noShow);
-  }
-  return rows;
-}
-
-function getFilteredForReports() {
-  return applyMeetingFilters(data?.meetings ?? []);
-}
-
-const REPORT_TABS = new Set(["live", "bdr", "outcomes", "handoffs"]);
-
-function getMetricsForView() {
-  const rows = applyMeetingFilters(data?.meetings ?? []);
-  return computeMeetingsMetrics(rows);
 }
 
 function updateFilterSummary() {
   const total = data?.meetings?.length ?? 0;
-  const filtered = applyMeetingFilters(data?.meetings ?? []).length;
+  const filtered = getFilteredForReports().length;
   const el = $("#filterSummary");
   const clearBtn = $("#clearFiltersBtn");
-
   if (!filtersActive() && filtered === total) {
     el.hidden = true;
     clearBtn.hidden = true;
     return;
   }
-
   el.hidden = false;
   clearBtn.hidden = false;
-
-  const parts = [`Showing ${filtered.toLocaleString()} of ${total.toLocaleString()} meetings`];
+  const parts = [`Showing ${filtered.toLocaleString()} of ${total.toLocaleString()} submissions`];
+  if (filters.websiteStatus) parts.push(`status: ${filters.websiteStatus}`);
+  if (filters.region) parts.push(`country: ${filters.region}`);
   if (filters.repKey) {
     const rep = data?.filterOptions?.reps?.find((r) => r.key === filters.repKey);
-    parts.push(`rep: ${rep?.name ?? filters.repKey.replace(/^id:|^email:/, "")}`);
+    parts.push(`assignee: ${rep?.name ?? filters.repKey.replace(/^id:|^name:/, "")}`);
   }
   if (filters.routingRuleId) {
-    const name =
-      data?.filterOptions?.routingRules?.find((r) => r.id === filters.routingRuleId)?.name ??
-      "selected rule";
-    parts.push(`website rule: ${name}`);
+    const name = data?.filterOptions?.routingRules?.find((r) => r.id === filters.routingRuleId)?.name ?? "selected rule";
+    parts.push(`rule: ${name}`);
   }
-  if (filters.region) parts.push(`website region: ${filters.region}`);
-  if (filters.meetingType) parts.push(`source: ${meetingTypeLabel(filters.meetingType)}`);
-  if (websiteFilterActive(filters) && !filters.meetingType) {
-    parts.push("handoffs/rep calendar limited to reps on this website route");
-  }
-  if (filters.dateFrom || filters.dateTo) {
-    parts.push(formatPeriodLabel(filters.dateFrom, filters.dateTo));
-  }
+  if (filters.dateFrom || filters.dateTo) parts.push(formatPeriodLabel(filters.dateFrom, filters.dateTo));
   el.textContent = parts.join(" · ");
-}
-
-function updateFilterControlState() {
-  const websiteOnlySource =
-    filters.meetingType === "handoff" || filters.meetingType === "chilical";
-  const ruleField = $("#filterRoutingRuleField");
-  const regionField = $("#filterRegionField");
-  const ruleSel = $("#filterRoutingRule");
-  const regionSel = $("#filterRegion");
-  const hint = $("#filterHint");
-
-  if (ruleSel) ruleSel.disabled = websiteOnlySource;
-  if (regionSel) regionSel.disabled = websiteOnlySource;
-  ruleField?.classList.toggle("filter-disabled", websiteOnlySource);
-  regionField?.classList.toggle("filter-disabled", websiteOnlySource);
-
-  if (hint) {
-    hint.hidden = false;
-    if (websiteOnlySource) {
-      hint.innerHTML =
-        "Region and routing rule only apply to <strong>website inbound</strong>. For handoffs or rep calendar, use <strong>date</strong> and <strong>rep</strong>.";
-    } else if (websiteFilterActive(filters) && !filters.meetingType) {
-      hint.innerHTML =
-        "Website rows match the region / routing rule. Handoffs and rep calendar include only reps who received a matching website meeting in this period.";
-    } else if (filters.meetingType === "concierge") {
-      hint.innerHTML = "Showing <strong>website inbound only</strong>. Switch source to “All sources” to include handoffs and rep calendar.";
-    } else {
-      hint.innerHTML =
-        "Pick a meeting source to focus one channel, or leave on “All sources” for the full picture.";
-    }
-  }
 }
 
 function refreshFilterOptions() {
@@ -214,66 +107,46 @@ function refreshFilterOptions() {
 
   const contextMeetings = applyMeetingFilters(data?.meetings ?? [], { ...filters, repKey: "" });
   const availableReps = buildRepsFromMeetings(contextMeetings);
-
   const repSel = $("#filterRep");
   const prevRep = filters.repKey;
   repSel.innerHTML =
-    `<option value="">All reps${availableReps.length ? ` (${availableReps.length} in view)` : ""}</option>` +
+    `<option value="">All assignees${availableReps.length ? ` (${availableReps.length} in view)` : ""}</option>` +
     availableReps
-      .map((r) => {
-        const label = r.name ?? r.key.replace(/^id:|^email:/, "");
-        return `<option value="${escapeHtml(r.key)}">${escapeHtml(label)}</option>`;
-      })
+      .map((r) => `<option value="${escapeHtml(r.key)}">${escapeHtml(r.name ?? r.key.replace(/^id:|^name:/, ""))}</option>`)
       .join("");
-  if (prevRep && availableReps.some((r) => r.key === prevRep)) {
-    repSel.value = prevRep;
-  } else {
-    filters.repKey = "";
-    repSel.value = "";
-  }
+  filters.repKey = prevRep && availableReps.some((r) => r.key === prevRep) ? prevRep : "";
+  repSel.value = filters.repKey;
 
   let rules = opts.routingRules ?? [];
-  if (filters.region) {
-    rules = rules.filter((r) => (r.region ?? "") === filters.region);
-  }
-
-  const ruleSel = $("#filterRoutingRule");
+  if (filters.region) rules = rules.filter((r) => (r.region ?? "") === filters.region);
   const byRegion = new Map();
   for (const rule of rules) {
     const region = rule.region ?? "Other";
     if (!byRegion.has(region)) byRegion.set(region, []);
     byRegion.get(region).push(rule);
   }
-
   let rulesHtml = `<option value="">All routing rules (${rules.length} in view)</option>`;
   for (const region of [...byRegion.keys()].sort((a, b) => a.localeCompare(b))) {
-    const group = byRegion.get(region);
     rulesHtml += `<optgroup label="${escapeHtml(region)}">`;
-    for (const rule of group) {
+    for (const rule of byRegion.get(region)) {
       rulesHtml += `<option value="${escapeHtml(rule.id)}">${escapeHtml(rule.name)}</option>`;
     }
     rulesHtml += `</optgroup>`;
   }
+  const ruleSel = $("#filterRoutingRule");
   ruleSel.innerHTML = rulesHtml;
-  if (filters.routingRuleId && rules.some((r) => r.id === filters.routingRuleId)) {
-    ruleSel.value = filters.routingRuleId;
-  } else {
-    filters.routingRuleId = "";
-    ruleSel.value = "";
-  }
+  filters.routingRuleId =
+    filters.routingRuleId && rules.some((r) => r.id === filters.routingRuleId) ? filters.routingRuleId : "";
+  ruleSel.value = filters.routingRuleId;
 }
 
 function syncRegionAndRuleFilters(changedId) {
   const opts = data?.filterOptions;
   if (!opts) return;
-
   if (changedId === "filterRegion" && filters.routingRuleId) {
     const rule = opts.routingRules?.find((r) => r.id === filters.routingRuleId);
-    if (rule?.region && filters.region && rule.region !== filters.region) {
-      filters.routingRuleId = "";
-    }
+    if (rule?.region && filters.region && rule.region !== filters.region) filters.routingRuleId = "";
   }
-
   if (changedId === "filterRoutingRule" && filters.routingRuleId) {
     const rule = opts.routingRules?.find((r) => r.id === filters.routingRuleId);
     if (rule?.region) {
@@ -284,8 +157,7 @@ function syncRegionAndRuleFilters(changedId) {
 }
 
 function syncFilterDates(changedKey) {
-  if (!filters.dateFrom || !filters.dateTo) return;
-  if (filters.dateFrom <= filters.dateTo) return;
+  if (!filters.dateFrom || !filters.dateTo || filters.dateFrom <= filters.dateTo) return;
   if (changedKey === "dateFrom") filters.dateTo = filters.dateFrom;
   else filters.dateFrom = filters.dateTo;
   $("#filterDateFrom").value = filters.dateFrom;
@@ -293,36 +165,30 @@ function syncFilterDates(changedKey) {
 }
 
 function populateFilterControls() {
-  populateStaticFilterControls();
-  refreshFilterOptions();
-  updateFilterControlState();
-}
-
-function populateStaticFilterControls() {
   const opts = data?.filterOptions;
   if (!opts) return;
-
   if (!filters.dateFrom) filters.dateFrom = opts.dateFrom ?? "";
   if (!filters.dateTo) filters.dateTo = opts.dateTo ?? "";
-
   $("#filterDateFrom").value = filters.dateFrom;
   $("#filterDateTo").value = filters.dateTo;
-  if (opts.dateRangeMin) $("#filterDateFrom").min = opts.dateRangeMin;
+  if (opts.dateRangeMin) {
+    $("#filterDateFrom").min = opts.dateRangeMin;
+    $("#filterDateTo").min = opts.dateRangeMin;
+  }
   if (opts.dateRangeMax) {
     $("#filterDateFrom").max = opts.dateRangeMax;
     $("#filterDateTo").max = opts.dateRangeMax;
   }
-  if (opts.dateRangeMin) $("#filterDateTo").min = opts.dateRangeMin;
-
-  $("#filterMeetingType").value = filters.meetingType;
-
-  const regionSel = $("#filterRegion");
-  regionSel.innerHTML =
-    `<option value="">All regions</option>` +
-    (opts.regions ?? [])
-      .map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`)
-      .join("");
-  regionSel.value = filters.region;
+  $("#filterWebsiteStatus").innerHTML =
+    `<option value="">All statuses</option>` +
+    (opts.websiteStatuses ?? []).map((s) => `<option value="${escapeHtml(s)}">${escapeHtml(s)}</option>`).join("");
+  $("#filterWebsiteStatus").value = filters.websiteStatus;
+  const countries = opts.countries?.length ? opts.countries : opts.regions ?? [];
+  $("#filterRegion").innerHTML =
+    `<option value="">All countries</option>` +
+    countries.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join("");
+  $("#filterRegion").value = filters.region;
+  refreshFilterOptions();
 }
 
 function clearFilters() {
@@ -330,143 +196,85 @@ function clearFilters() {
   filters.dateFrom = opts?.dateFrom ?? "";
   filters.dateTo = opts?.dateTo ?? "";
   filters.dateField = "bookedAt";
-  filters.repKey = "";
-  filters.routingRuleId = "";
-  filters.region = "";
-  filters.meetingType = "";
+  filters.repKey = filters.routingRuleId = filters.region = filters.websiteStatus = "";
   populateFilterControls();
   renderAll();
 }
 
-function meetingDateForChart(m) {
-  return (
-    parseMeetingDate(m[filters.dateField]) ??
-    parseMeetingDate(m.meetingAt) ??
-    parseMeetingDate(m.bookedAt)
-  );
-}
-
-function startOfUtcDay(d) {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-}
-
-function addUtcDays(d, n) {
+const CHART_OUTCOME = {
+  scheduled: "booked",
+  not_scheduled: "not_booked",
+  disqualified: "disqualified",
+  canceled: "canceled",
+};
+const chartBucket = (m) => CHART_OUTCOME[m.outcome] ?? null;
+const meetingDateForChart = (m) => parseMeetingDate(m[filters.dateField]) ?? parseMeetingDate(m.bookedAt);
+const startOfUtcDay = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+const addUtcDays = (d, n) => {
   const x = new Date(d);
   x.setUTCDate(x.getUTCDate() + n);
   return x;
-}
-
-function startOfUtcWeek(d) {
+};
+const startOfUtcWeek = (d) => {
   const day = startOfUtcDay(d);
-  const dow = day.getUTCDay();
-  const diff = dow === 0 ? -6 : 1 - dow;
-  return addUtcDays(day, diff);
-}
-
-function startOfUtcMonth(d) {
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
-}
-
-function bucketKeyForDate(d, granularity) {
-  if (granularity === "month") {
-    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-  }
-  if (granularity === "week") {
-    return startOfUtcWeek(d).toISOString().slice(0, 10);
-  }
-  return startOfUtcDay(d).toISOString().slice(0, 10);
-}
-
-function advanceBucket(cursor, granularity) {
-  if (granularity === "month") {
-    return new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1));
-  }
-  if (granularity === "week") return addUtcDays(cursor, 7);
-  return addUtcDays(cursor, 1);
-}
-
-function pickGranularity(from, to) {
+  return addUtcDays(day, day.getUTCDay() === 0 ? -6 : 1 - day.getUTCDay());
+};
+const startOfUtcMonth = (d) => new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1));
+const bucketKeyForDate = (d, g) =>
+  g === "month"
+    ? `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`
+    : g === "week"
+      ? startOfUtcWeek(d).toISOString().slice(0, 10)
+      : startOfUtcDay(d).toISOString().slice(0, 10);
+const advanceBucket = (c, g) =>
+  g === "month"
+    ? new Date(Date.UTC(c.getUTCFullYear(), c.getUTCMonth() + 1, 1))
+    : addUtcDays(c, g === "week" ? 7 : 1);
+const pickGranularity = (from, to) => {
   if (!from || !to) return "week";
-  const days = Math.max(1, Math.ceil((to - from) / 86400000));
-  if (days > 120) return "week";
-  if (days > 14) return "day";
-  return "day";
-}
-
-function formatBucketLabel(key, granularity) {
+  return Math.max(1, Math.ceil((to - from) / 86400000)) > 120 ? "week" : "day";
+};
+const formatBucketLabel = (key, g) => {
   const d = new Date(`${key}T00:00:00.000Z`);
-  if (granularity === "month") {
-    return d.toLocaleDateString(undefined, { month: "short", year: "2-digit", timeZone: "UTC" });
-  }
-  if (granularity === "week") {
-    return d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
-  }
+  if (g === "month") return d.toLocaleDateString(undefined, { month: "short", year: "2-digit", timeZone: "UTC" });
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" });
-}
+};
+const emptyBucket = (key) => ({ key, booked: 0, not_booked: 0, disqualified: 0, canceled: 0, total: 0 });
 
 function buildPeriodSeries(meetings) {
-  const dated = [];
-  for (const m of meetings) {
+  const dated = meetings.flatMap((m) => {
     const d = meetingDateForChart(m);
-    if (d) dated.push({ m, d });
-  }
-
-  if (!dated.length) {
-    return { buckets: [], granularity: "day", total: 0, rangeFrom: null, rangeTo: null };
-  }
+    return d ? [{ m, d }] : [];
+  });
+  if (!dated.length) return { buckets: [], granularity: "day", total: 0, rangeFrom: null, rangeTo: null };
 
   let rangeFrom = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : null;
   let rangeTo = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59.999Z`) : null;
-
   for (const { d } of dated) {
     if (!rangeFrom || d < rangeFrom) rangeFrom = startOfUtcDay(d);
     if (!rangeTo || d > rangeTo) rangeTo = startOfUtcDay(d);
   }
-
-  if (!rangeFrom || !rangeTo) {
-    return { buckets: [], granularity: "day", total: 0 };
-  }
-
-  const granularity =
-    chartGranularity === "auto" ? pickGranularity(rangeFrom, rangeTo) : chartGranularity;
-
-  if (granularity === "month") {
-    rangeFrom = startOfUtcMonth(rangeFrom);
-    rangeTo = startOfUtcMonth(rangeTo);
-  } else if (granularity === "week") {
-    rangeFrom = startOfUtcWeek(rangeFrom);
-    rangeTo = startOfUtcWeek(rangeTo);
-  } else {
-    rangeFrom = startOfUtcDay(rangeFrom);
-    rangeTo = startOfUtcDay(rangeTo);
-  }
+  const granularity = chartGranularity === "auto" ? pickGranularity(rangeFrom, rangeTo) : chartGranularity;
+  rangeFrom =
+    granularity === "month" ? startOfUtcMonth(rangeFrom) : granularity === "week" ? startOfUtcWeek(rangeFrom) : startOfUtcDay(rangeFrom);
+  rangeTo =
+    granularity === "month" ? startOfUtcMonth(rangeTo) : granularity === "week" ? startOfUtcWeek(rangeTo) : startOfUtcDay(rangeTo);
 
   const bucketMap = new Map();
-  let cursor = new Date(rangeFrom);
-  const end = new Date(rangeTo);
-  while (cursor <= end) {
-    const key = bucketKeyForDate(cursor, granularity);
-    bucketMap.set(key, { key, concierge: 0, handoff: 0, chilical: 0, other: 0, total: 0 });
-    cursor = advanceBucket(cursor, granularity);
+  for (let cursor = new Date(rangeFrom); cursor <= rangeTo; cursor = advanceBucket(cursor, granularity)) {
+    bucketMap.set(bucketKeyForDate(cursor, granularity), emptyBucket(bucketKeyForDate(cursor, granularity)));
   }
-
   for (const { m, d } of dated) {
+    const bucket = chartBucket(m);
+    if (!bucket) continue;
     const key = bucketKeyForDate(d, granularity);
-    let b = bucketMap.get(key);
-    if (!b) {
-      b = { key, concierge: 0, handoff: 0, chilical: 0, other: 0, total: 0 };
-      bucketMap.set(key, b);
-    }
-    if (m.meetingType === "concierge") b.concierge++;
-    else if (m.meetingType === "handoff") b.handoff++;
-    else if (m.meetingType === "chilical") b.chilical++;
-    else b.other++;
+    const b = bucketMap.get(key) ?? emptyBucket(key);
+    b[bucket]++;
     b.total++;
+    bucketMap.set(key, b);
   }
-
   const buckets = [...bucketMap.values()].sort((a, b) => a.key.localeCompare(b.key));
-  const total = buckets.reduce((s, b) => s + b.total, 0);
-  return { buckets, granularity, total, rangeFrom, rangeTo };
+  return { buckets, granularity, total: buckets.reduce((s, b) => s + b.total, 0), rangeFrom, rangeTo };
 }
 
 function renderPeriodChart() {
@@ -474,31 +282,20 @@ function renderPeriodChart() {
   const { buckets, granularity, total, rangeFrom, rangeTo } = buildPeriodSeries(meetings);
   const svg = $("#periodChart");
   const empty = $("#chartEmpty");
-
-  const granLabel =
-    granularity === "month" ? "month" : granularity === "week" ? "week" : "day";
-  let subtitle = `${total.toLocaleString()} meetings · stacked by ${granLabel}`;
+  const granLabel = granularity === "month" ? "month" : granularity === "week" ? "week" : "day";
+  let subtitle = `${total.toLocaleString()} submissions · stacked by ${granLabel}`;
   if (rangeFrom && rangeTo) {
-    const fmt = (d) =>
-      d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+    const fmt = (d) => d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
     subtitle += ` · ${fmt(rangeFrom)} – ${fmt(rangeTo)}`;
   }
   $("#chartSubtitle").textContent = subtitle;
-
   if (!buckets.length || total === 0) {
     svg.innerHTML = "";
-    svg.removeAttribute("aria-hidden");
     empty.hidden = false;
-    empty.textContent =
-      meetings.length === 0
-        ? "No meetings match the current filters. Widen the date range or clear website-only filters."
-        : "No bookings to chart for this period.";
+    empty.textContent = meetings.length === 0 ? "No submissions match the current filters." : "No chartable outcomes in this period.";
     return;
   }
-
   empty.hidden = true;
-  svg.setAttribute("aria-hidden", "false");
-
   const w = 800;
   const h = 300;
   const padL = 48;
@@ -512,502 +309,247 @@ function renderPeriodChart() {
   const gap = n > 20 ? 2 : Math.min(4, chartW / n / 4);
   const barW = Math.max(3, (chartW - gap * (n - 1)) / n);
   const labelStep = n <= 12 ? 1 : n <= 24 ? 2 : Math.max(1, Math.ceil(n / 10));
-
-  const yTicks = 4;
+  const segments = [
+    ["bar-concierge", "booked", "booked"],
+    ["bar-other", "not_booked", "not booked"],
+    ["bar-handoff", "disqualified", "disqualified"],
+    ["bar-chilical", "canceled", "canceled"],
+  ];
   let svgParts = [];
-
-  for (let i = 0; i <= yTicks; i++) {
-    const val = Math.round((maxVal * (yTicks - i)) / yTicks);
-    const y = padT + (chartH * i) / yTicks;
+  for (let i = 0; i <= 4; i++) {
+    const val = Math.round((maxVal * (4 - i)) / 4);
+    const y = padT + (chartH * i) / 4;
     svgParts.push(`<line class="grid-line" x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" />`);
-    svgParts.push(
-      `<text class="axis-label" x="${padL - 10}" y="${y + 4}" text-anchor="end">${val}</text>`,
-    );
+    svgParts.push(`<text class="axis-label" x="${padL - 10}" y="${y + 4}" text-anchor="end">${val}</text>`);
   }
-
   buckets.forEach((b, i) => {
     const x = padL + i * (barW + gap);
-    const segments = [
-      { cls: "bar-concierge", n: b.concierge },
-      { cls: "bar-handoff", n: b.handoff },
-      { cls: "bar-chilical", n: b.chilical },
-      { cls: "bar-other", n: b.other },
-    ];
     let yTop = padT + chartH;
-    for (const seg of segments) {
-      if (!seg.n) continue;
-      const barH = Math.max(1, (seg.n / maxVal) * chartH);
+    for (const [cls, field, label] of segments) {
+      const segN = b[field];
+      if (!segN) continue;
+      const barH = Math.max(1, (segN / maxVal) * chartH);
       yTop -= barH;
-      const title = `${formatBucketLabel(b.key, granularity)}: ${seg.cls.replace("bar-", "")} ${seg.n}`;
       svgParts.push(
-        `<rect class="${seg.cls}" x="${x}" y="${yTop}" width="${barW}" height="${barH}" rx="2"><title>${escapeHtml(title)}</title></rect>`,
+        `<rect class="${cls}" x="${x}" y="${yTop}" width="${barW}" height="${barH}" rx="2"><title>${escapeHtml(`${formatBucketLabel(b.key, granularity)}: ${label} ${segN}`)}</title></rect>`,
       );
     }
     if (i % labelStep === 0 || i === n - 1) {
-      const label = formatBucketLabel(b.key, granularity);
       svgParts.push(
-        `<text class="axis-label axis-label-x" x="${x + barW / 2}" y="${h - 14}" text-anchor="middle">${escapeHtml(label)}</text>`,
+        `<text class="axis-label axis-label-x" x="${x + barW / 2}" y="${h - 14}" text-anchor="middle">${escapeHtml(formatBucketLabel(b.key, granularity))}</text>`,
       );
     }
   });
-
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.innerHTML = svgParts.join("");
 }
 
-function repKeyForMeeting(m) {
-  return primaryRepKey(m);
-}
-
-function repDisplayForMeeting(m) {
-  return { name: primaryRepName(m) };
-}
-
 function renderRuleAssigneeBreakdown() {
   const section = $("#ruleAssigneeSection");
-  const websiteScope = websiteFilterActive(filters);
-  if (!websiteScope) {
+  if (!filters.routingRuleId) {
     section.hidden = true;
     return;
   }
-
-  const filtered = applyMeetingFilters(data?.meetings ?? []);
-  const rule =
-    data?.filterOptions?.routingRules?.find((r) => r.id === filters.routingRuleId) ??
-    data?.meetings?.find((m) => m.routingRuleId === filters.routingRuleId)?.routingRule;
-
-  const websiteRows = filtered.filter((m) => m.meetingType === "concierge");
-  const handoffRows = filtered.filter((m) => m.meetingType === "handoff");
-  const chilicalRows = filtered.filter((m) => m.meetingType === "chilical");
-
+  const filtered = getFilteredForReports();
+  const rule = data?.filterOptions?.routingRules?.find((r) => r.id === filters.routingRuleId);
   section.hidden = false;
-  const scopeLabel = rule?.name ?? (filters.region ? `${filters.region} website` : "selected website route");
-  $("#ruleAssigneeHeading").textContent = "Rep breakdown for website filter";
-  const websiteTotal = websiteRows.length;
-  const handoffTotal = handoffRows.length;
-  const chilicalTotal = chilicalRows.length;
-  $("#ruleAssigneeSubtitle").textContent =
-    `${websiteTotal.toLocaleString()} website on ${scopeLabel} · ${handoffTotal.toLocaleString()} handoffs · ${chilicalTotal.toLocaleString()} rep calendar for the same reps`;
-
+  $("#ruleAssigneeHeading").textContent = "Assignees for selected rule";
+  $("#ruleAssigneeSubtitle").textContent = `${filtered.length.toLocaleString()} submissions · ${rule?.name ?? filters.routingRuleId}`;
   const byRep = new Map();
-
-  function ensureRep(m) {
-    const key = repKeyForMeeting(m);
+  for (const m of filtered) {
+    const key = primaryRepKey(m);
     if (!byRep.has(key)) {
-      byRep.set(key, {
-        name: repDisplayForMeeting(m).name,
-        total: 0,
-        concierge: 0,
-        chilical: 0,
-        handoff: 0,
-        scheduled: 0,
-        noShow: 0,
-        canceled: 0,
-      });
+      byRep.set(key, { name: primaryRepName(m), total: 0, booked: 0, notBooked: 0, disqualified: 0, canceled: 0 });
     }
-    return byRep.get(key);
-  }
-
-  for (const m of websiteRows) {
-    const r = ensureRep(m);
+    const r = byRep.get(key);
     r.total++;
-    r.concierge++;
-    if (m.outcome === "scheduled") r.scheduled++;
-    if (m.noShow) r.noShow++;
-    if (m.canceled) r.canceled++;
+    if (m.outcome === "scheduled") r.booked++;
+    else if (m.outcome === "not_scheduled") r.notBooked++;
+    else if (m.outcome === "disqualified") r.disqualified++;
+    else if (m.outcome === "canceled") r.canceled++;
   }
-
-  for (const m of handoffRows) {
-    const r = ensureRep(m);
-    r.total++;
-    r.handoff++;
-    if (m.outcome === "scheduled") r.scheduled++;
-    if (m.noShow) r.noShow++;
-    if (m.canceled) r.canceled++;
-  }
-
-  for (const m of chilicalRows) {
-    const r = ensureRep(m);
-    r.total++;
-    r.chilical++;
-    if (m.outcome === "scheduled") r.scheduled++;
-    if (m.noShow) r.noShow++;
-    if (m.canceled) r.canceled++;
-  }
-
   const sorted = [...byRep.values()].sort((a, b) => b.total - a.total);
-  const tbody = $("#ruleAssigneeBody");
-  tbody.innerHTML = sorted
+  $("#ruleAssigneeBody").innerHTML = sorted
     .map(
-      (r) => `
-    <tr>
-      <td>${escapeHtml(r.name)}</td>
-      <td class="num">${r.total}</td>
-      <td class="num">${r.concierge}</td>
-      <td class="num">${r.chilical}</td>
-      <td class="num">${r.handoff}</td>
-      <td class="num">${r.scheduled}</td>
-      <td class="num">${r.noShow}</td>
-      <td class="num">${r.canceled}</td>
-    </tr>
-  `,
+      (r) =>
+        `<tr><td>${escapeHtml(r.name)}</td><td class="num">${r.total}</td><td class="num">${r.booked}</td><td class="num">${r.notBooked}</td><td class="num">${r.disqualified}</td><td class="num">${r.canceled}</td></tr>`,
     )
     .join("");
-
   $("#ruleAssigneeEmpty").hidden = sorted.length > 0;
+}
+
+const OUTCOME_ITEMS = [
+  { key: "scheduled", label: "Booked", cls: "success" },
+  { key: "not_scheduled", label: "Not booked", cls: "muted" },
+  { key: "disqualified", label: "Disqualified", cls: "warning" },
+  { key: "canceled", label: "Canceled", cls: "danger" },
+  { key: "in_progress", label: "In progress", cls: "other" },
+  { key: "failed", label: "Failed", cls: "danger" },
+];
+
+function augmentLiveByRuleBooked(meetings, reports) {
+  const bookedByRule = new Map();
+  for (const m of meetings) {
+    if (!m.booked) continue;
+    const key = m.routingRuleId ?? "unknown";
+    bookedByRule.set(key, (bookedByRule.get(key) ?? 0) + 1);
+  }
+  for (const r of reports.liveBooked.byRule) r.booked = bookedByRule.get(r.ruleId ?? "unknown") ?? 0;
 }
 
 function renderLiveReport(reports) {
   const panel = $("#liveReportPanel");
-  const show = activeTab === "live";
-  panel.hidden = !show;
-  if (!show) return;
-
+  panel.hidden = activeTab !== "live";
+  if (panel.hidden) return;
   const live = reports.liveBooked;
-  $("#liveReportSubtitle").textContent = `${live.total.toLocaleString()} website inbound meetings in this period`;
-  $("#badgeLive").textContent = String(live.total);
-
+  $("#liveReportSubtitle").textContent = `${live.total.toLocaleString()} submissions · ${live.booked.toLocaleString()} booked`;
   $("#liveByDateBody").innerHTML = live.byDate
     .slice(-60)
     .reverse()
     .map((r) => `<tr><td>${escapeHtml(r.date)}</td><td class="num">${r.count}</td></tr>`)
     .join("");
-
   $("#liveByRegionBody").innerHTML = live.byRegion
     .map((r) => `<tr><td>${escapeHtml(r.region)}</td><td class="num">${r.count}</td></tr>`)
     .join("");
-
   $("#liveByRuleBody").innerHTML = live.byRule
     .map(
       (r) =>
-        `<tr><td>${escapeHtml(r.ruleName)}</td><td>${escapeHtml(r.region) || "—"}</td><td class="num">${r.count}</td></tr>`,
+        `<tr><td>${escapeHtml(r.ruleName)}</td><td>${escapeHtml(r.region) || "—"}</td><td class="num">${r.count}</td><td class="num">${r.booked ?? 0}</td></tr>`,
     )
     .join("");
 }
 
 function renderBdrReport(reports) {
   const panel = $("#bdrReportPanel");
-  const show = activeTab === "bdr";
-  panel.hidden = !show;
-  if (!show) return;
-
+  panel.hidden = activeTab !== "bdr";
+  if (panel.hidden) return;
   const rules = reports.ruleBdrDistribution;
-  $("#bdrReportSubtitle").textContent = `${rules.length} routing rules with calendar meetings`;
-  $("#badgeBdr").textContent = String(rules.length);
-
+  $("#bdrReportSubtitle").textContent = `${rules.length} routing rules with assignee activity`;
   if (!rules.length) {
     $("#bdrRuleBlocks").innerHTML = "";
     $("#bdrReportEmpty").hidden = false;
     return;
   }
   $("#bdrReportEmpty").hidden = true;
-
   $("#bdrRuleBlocks").innerHTML = rules
     .map((rule) => {
       const rows = rule.bdrs
-        .map(
-          (b) =>
-            `<tr><td>${escapeHtml(b.name)}</td><td class="num">${b.count}</td></tr>`,
-        )
+        .map((b) => `<tr><td>${escapeHtml(b.name)}</td><td class="num">${b.count}</td><td class="num">${b.booked ?? 0}</td></tr>`)
         .join("");
-      return `
-        <article class="bdr-rule-block">
-          <h3>${escapeHtml(rule.ruleName)} <span class="rule-meta">${escapeHtml(rule.region) || ""} · ${rule.total} meetings</span></h3>
-          <div class="table-wrap">
-            <table class="assignee-table compact-table">
-              <thead><tr><th>BDR / assignee</th><th>Meetings</th></tr></thead>
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-        </article>`;
+      return `<article class="bdr-rule-block"><h3>${escapeHtml(rule.ruleName)} <span class="rule-meta">${escapeHtml(rule.region) || ""} · ${rule.total} total · ${rule.booked} booked</span></h3><div class="table-wrap"><table class="assignee-table compact-table"><thead><tr><th>Assignee</th><th>Total</th><th>Booked</th></tr></thead><tbody>${rows}</tbody></table></div></article>`;
     })
     .join("");
 }
 
 function renderOutcomesReport(reports) {
   const panel = $("#outcomesReportPanel");
-  const show = activeTab === "outcomes";
-  panel.hidden = !show;
-  if (!show) return;
-
+  panel.hidden = activeTab !== "outcomes";
+  if (panel.hidden) return;
   const { total, counts } = reports.outcomes;
-  $("#outcomesReportSubtitle").textContent = `${total.toLocaleString()} calendar meetings in filtered period`;
-  $("#badgeOutcomes").textContent = String(total);
-
-  const items = [
-    { key: "scheduled", label: "Scheduled", cls: "success" },
-    { key: "completed", label: "Held", cls: "success" },
-    { key: "noshow", label: "No-show", cls: "danger" },
-    { key: "canceled", label: "Canceled", cls: "danger" },
-    { key: "rescheduled", label: "Rescheduled", cls: "warning" },
-    { key: "unknown", label: "Other", cls: "other" },
-  ];
-
-  $("#outcomeBars").innerHTML = items
-    .filter((i) => (counts[i.key] ?? 0) > 0)
+  $("#outcomesReportSubtitle").textContent = `${total.toLocaleString()} submissions in filtered period`;
+  $("#outcomeBars").innerHTML = OUTCOME_ITEMS.filter((i) => (counts[i.key] ?? 0) > 0)
     .map((i) => {
       const n = counts[i.key] ?? 0;
       const pctVal = total ? Math.round((n / total) * 1000) / 10 : 0;
-      return `
-        <div class="outcome-bar-row">
-          <span class="outcome-label ${i.cls}">${escapeHtml(i.label)}</span>
-          <div class="outcome-bar-track"><div class="outcome-bar-fill ${i.cls}" style="width:${pctVal}%"></div></div>
-          <span class="num">${n.toLocaleString()} (${pctVal}%)</span>
-        </div>`;
+      return `<div class="outcome-bar-row"><span class="outcome-label ${i.cls}">${escapeHtml(i.label)}</span><div class="outcome-bar-track"><div class="outcome-bar-fill ${i.cls}" style="width:${pctVal}%"></div></div><span class="num">${n.toLocaleString()} (${pctVal}%)</span></div>`;
     })
     .join("");
-
-  $("#outcomeGrid").innerHTML = items
-    .map(
-      (i) => `
-      <article class="breakdown-card">
-        <h3>${escapeHtml(i.label)}</h3>
-        <p class="outcome-big">${(counts[i.key] ?? 0).toLocaleString()}</p>
-      </article>`,
-    )
-    .join("");
-}
-
-function renderHandoffsReport(reports) {
-  const panel = $("#handoffsReportPanel");
-  const show = activeTab === "handoffs";
-  panel.hidden = !show;
-  if (!show) return;
-
-  const h = reports.handoffs;
-  $("#handoffsReportSubtitle").textContent = `${h.total.toLocaleString()} handoffs · ${h.scheduled.toLocaleString()} scheduled · ${h.noShow.toLocaleString()} no-show`;
-  $("#badgeHandoffs").textContent = String(h.total);
-
-  $("#handoffSummary").innerHTML = `
-    <span>Total <strong>${h.total}</strong></span>
-    <span>Scheduled <strong>${h.scheduled}</strong></span>
-    <span>No-show <strong>${h.noShow}</strong></span>
-    <span>Canceled <strong>${h.canceled}</strong></span>
-    <span>BDR→AE pairs <strong>${h.byPair.length}</strong></span>`;
-
-  $("#handoffPairsBody").innerHTML = h.byPair
-    .map(
-      (p) => `
-    <tr>
-      <td>${escapeHtml(p.bdrName)}</td>
-      <td>${escapeHtml(p.aeName)}</td>
-      <td class="num">${p.total}</td>
-      <td class="num">${p.scheduled}</td>
-      <td class="num">${p.noShow ?? 0}</td>
-      <td class="num">${p.canceled}</td>
-    </tr>`,
-    )
-    .join("");
-
-  $("#handoffPairsEmpty").hidden = h.byPair.length > 0;
+  $("#outcomeGrid").innerHTML = OUTCOME_ITEMS.map(
+    (i) => `<article class="breakdown-card"><h3>${escapeHtml(i.label)}</h3><p class="outcome-big">${(counts[i.key] ?? 0).toLocaleString()}</p></article>`,
+  ).join("");
 }
 
 function renderReports() {
   const meetings = getFilteredForReports();
   const reports = computeMeetingsReports(meetings, filters.dateField);
+  augmentLiveByRuleBooked(meetings, reports);
   renderLiveReport(reports);
   renderBdrReport(reports);
   renderOutcomesReport(reports);
-  renderHandoffsReport(reports);
+  return reports;
 }
 
-function updateKpiHighlight() {
-  const row = $("#kpiRow");
-  if (!row) return;
-  row.classList.remove("kpi-focus-concierge", "kpi-focus-handoff", "kpi-focus-chilical");
-  if (filters.meetingType === "concierge") row.classList.add("kpi-focus-concierge");
-  if (filters.meetingType === "handoff") row.classList.add("kpi-focus-handoff");
-  if (filters.meetingType === "chilical") row.classList.add("kpi-focus-chilical");
+function renderKpis() {
+  const m = computeWebsiteMetrics(getFilteredForReports());
+  $("#kpiTotal").textContent = String(m.total);
+  $("#kpiBooked").textContent = String(m.booked);
+  $("#kpiNotBooked").textContent = String(m.notBooked);
+  $("#kpiDisqualified").textContent = String(m.disqualified);
+  $("#kpiCanceled").textContent = String(m.canceled);
+  $("#kpiTotalFoot").textContent = filtersActive() ? "Filtered submissions" : "This month (booking date)";
+  $("#kpiBookedFoot").textContent = `${formatRate(m.rates.bookedOfTotal)} booked rate`;
+  $("#kpiNotBookedFoot").textContent = `${formatRate(m.rates.notBookedOfTotal)} of total`;
+  $("#kpiDisqualifiedFoot").textContent = `${formatRate(m.rates.disqualifiedOfTotal)} of total`;
+  $("#kpiCanceledFoot").textContent = `${formatRate(m.rates.canceledOfTotal)} of total`;
+  $("#badgeAll").textContent = String(m.total);
+  const reports = computeMeetingsReports(getFilteredForReports(), filters.dateField);
+  $("#badgeLive").textContent = String(reports.liveBooked.total);
+  $("#badgeBdr").textContent = String(reports.ruleBdrDistribution.length);
+  $("#badgeOutcomes").textContent = String(reports.outcomes.total);
 }
 
-function renderAll() {
-  refreshFilterOptions();
-  updateFilterSummary();
-  updateFilterControlState();
-  updateKpiHighlight();
-  renderKpis();
-  renderReports();
-  const onReportTab = REPORT_TABS.has(activeTab);
-  const hideOverview = onReportTab;
-  document.querySelector(".chart-panel.card")?.toggleAttribute("hidden", hideOverview);
-  document.querySelector("#breakdownHeading")?.closest(".card")?.toggleAttribute("hidden", hideOverview);
-  document.querySelector(".table-section.card")?.toggleAttribute("hidden", hideOverview && activeTab !== "all");
-  document.querySelector("#ruleAssigneeSection")?.toggleAttribute(
-    "hidden",
-    hideOverview || !websiteFilterActive(filters) || Boolean(filters.meetingType),
-  );
-  if (!hideOverview) {
-    renderPeriodChart();
-    renderRuleAssigneeBreakdown();
-    renderBreakdown();
-    renderTable();
-  }
-  $("#distributionPanel")?.setAttribute("hidden", "");
-  updatePeriodLine();
+function statusPill(m) {
+  const label = m.statusLabel ?? m.websiteStatus ?? "Unknown";
+  let cls = "scheduled";
+  if (m.outcome === "scheduled" || m.booked) cls = "scheduled";
+  else if (m.outcome === "disqualified" || m.disqualified) cls = "warning";
+  else if (m.outcome === "canceled" || m.canceled) cls = "noshow";
+  else if (m.outcome === "not_scheduled") cls = "muted";
+  return `<span class="status-pill ${cls}">${escapeHtml(label)}</span>`;
+}
+
+function formatSalesforceLink(m) {
+  if (!m.crmContactUrl) return "—";
+  const kind = /\/Lead\//i.test(m.crmContactUrl) ? "Lead" : "Contact";
+  return `<a class="sf-link" href="${escapeHtml(m.crmContactUrl)}" target="_blank" rel="noopener noreferrer">${kind}</a>`;
+}
+
+function formatRoutingRule(m) {
+  const name = m.routingRuleName ?? m.routingRule?.name;
+  if (!name) return "—";
+  const region = m.region ?? m.routingRule?.region ?? m.country ?? "";
+  return `<span class="rule-name">${escapeHtml(name)}</span>${region ? `<span class="rule-meta">${escapeHtml(region)}</span>` : ""}`;
+}
+
+function renderTable() {
+  const rows = getFilteredMeetings()
+    .sort((a, b) => String(b.bookedAt).localeCompare(String(a.bookedAt)))
+    .slice(0, 400);
+  $("#meetingsBody").innerHTML = rows
+    .map(
+      (m) =>
+        `<tr><td class="date-cell">${formatBookedDate(m.bookedAt)}</td><td>${escapeHtml(m.company || m.title) || "—"}</td><td>${escapeHtml(m.country ?? m.region) || "—"}</td><td class="rule-cell">${formatRoutingRule(m)}</td><td class="person-cell">${escapeHtml(primaryRepName(m))}</td><td>${statusPill(m)}</td><td class="sf-cell">${formatSalesforceLink(m)}</td></tr>`,
+    )
+    .join("");
+  $("#emptyState").hidden = rows.length > 0;
 }
 
 function updatePeriodLine() {
   const el = $("#periodLine");
-  if (!el) return;
   const label = formatPeriodLabel(filters.dateFrom, filters.dateTo);
   if (!label) {
     el.hidden = true;
     return;
   }
-  const count = applyMeetingFilters(data?.meetings ?? []).length;
-  el.textContent = `${label} · ${count.toLocaleString()} meetings in view`;
+  el.textContent = `${label} · ${getFilteredForReports().length.toLocaleString()} submissions in view`;
   el.hidden = false;
 }
 
-function renderKpis() {
-  const m = getMetricsForView();
-  const filtered = filtersActive();
-
-  $("#kpiCalendarTotal").textContent = String(m.total);
-  $("#kpiConciergeCalendar").textContent = String(m.byType.concierge.total);
-  $("#kpiHandoff").textContent = String(m.byType.handoff.total);
-  $("#kpiChilical").textContent = String(m.byType.chilical?.total ?? 0);
-  $("#kpiScheduled").textContent = String(m.scheduled);
-  $("#kpiHeld").textContent = String(m.held);
-  $("#kpiNoShow").textContent = String(m.noShow);
-
-  $("#kpiCalendarFoot").textContent = filtered ? "Custom date range" : "This month (booking date)";
-  $("#kpiConciergeCalendarFoot").textContent = `${formatRate(pct(m.byType.concierge.total, m.total))} of total`;
-  $("#kpiHandoffFoot").textContent = `${formatRate(pct(m.byType.handoff.total, m.total))} of total`;
-  $("#kpiChilicalFoot").textContent = `${formatRate(pct(m.byType.chilical?.total ?? 0, m.total))} of total`;
-  $("#kpiScheduledFoot").textContent = `${formatRate(m.rates.scheduledOfTotal)} upcoming`;
-  $("#kpiHeldFoot").textContent = `${formatRate(pct(m.held, m.total))} held`;
-  $("#kpiNoShowFoot").textContent = `${formatRate(m.rates.noShowOfTotal)} no-show rate`;
-
-  $("#badgeAll").textContent = String(m.total);
-
-  const filteredRows = applyMeetingFilters(data?.meetings ?? []);
-  const reports = computeMeetingsReports(filteredRows, filters.dateField);
-  $("#badgeLive").textContent = String(reports.liveBooked.total);
-  $("#badgeBdr").textContent = String(reports.ruleBdrDistribution.length);
-  $("#badgeOutcomes").textContent = String(reports.outcomes.total);
-  $("#badgeHandoffs").textContent = String(reports.handoffs.total);
-}
-
-function renderBreakdown() {
-  const m = getMetricsForView();
-  const grid = $("#breakdownGrid");
-  const types = [
-    { key: "concierge", title: "Website inbound" },
-    { key: "handoff", title: "BDR → AE handoff" },
-    { key: "chilical", title: "Rep calendar" },
-  ];
-
-  grid.innerHTML = types
-    .map(({ key, title }) => {
-      const s = m.byType[key];
-      if (!s) return "";
-      if (filters.meetingType && filters.meetingType !== key) return "";
-      return `
-        <article class="breakdown-card">
-          <h3>${escapeHtml(title)}</h3>
-          <dl class="breakdown-stats">
-            <div><dt>Booked</dt><dd>${s.total.toLocaleString()}</dd></div>
-            <div><dt>Scheduled</dt><dd>${s.scheduled.toLocaleString()}</dd></div>
-            <div><dt>Held</dt><dd>${(s.held ?? 0).toLocaleString()}</dd></div>
-            <div><dt>No-show</dt><dd>${(s.noShow ?? 0).toLocaleString()}</dd></div>
-            <div><dt>Canceled</dt><dd>${s.canceled.toLocaleString()}</dd></div>
-          </dl>
-        </article>
-      `;
-    })
-    .join("");
-}
-
-function filteredMeetingsForTable() {
-  let rows = getFilteredMeetings();
-  rows = [...rows].sort((a, b) => String(b.bookedAt).localeCompare(String(a.bookedAt)));
-  return rows.slice(0, 400);
-}
-
-function statusPill(m) {
-  const label = m.statusLabel ?? outcomeLabel(m.outcome) ?? statusLabel(m.status);
-  let cls = "scheduled";
-  if (m.canceled) cls = "canceled";
-  else if (m.noShow) cls = "noshow";
-  else if (m.happened || m.outcome === "completed") cls = "completed";
-  return `<span class="status-pill ${cls}">${escapeHtml(label)}</span>`;
-}
-
-function formatSalesforceLink(m) {
-  const url = m.crmContactUrl;
-  if (!url) return "—";
-  const kind = /\/Lead\//i.test(url) ? "Lead" : "Contact";
-  return `<a class="sf-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="Open in Salesforce">${kind}</a>`;
-}
-
-function formatMeetingTime(iso) {
-  if (!iso) return "—";
-  const normalized = String(iso).includes("T")
-    ? iso.replace(" Z", "Z")
-    : iso.replace(" Z", "+00:00").replace(" ", "T");
-  const d = new Date(normalized);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
-
-function formatPerson(user) {
-  if (!user?.name) return "—";
-  return `<span class="person-name">${escapeHtml(user.name)}</span>`;
-}
-
-function formatRouteOrigin(origin) {
-  const o = origin ?? "unlinked";
-  const label = o === "ownership" ? "Ownership" : o === "router" ? "Router" : "No site log";
-  return `<span class="origin-tag ${escapeHtml(o)}">${label}</span>`;
-}
-
-function formatRoutingRule(m) {
-  const rule = m.routingRule;
-  const name = m.routingRuleName || rule?.name;
-  if (!name) return "—";
-  const meta = [rule?.segment, rule?.size].filter(Boolean).join(" · ");
-  const title = [name, rule?.region, meta, rule?.countries].filter(Boolean).join(" · ");
-  const sub = meta || rule?.region || "";
-  return `<span class="rule-name" title="${escapeHtml(title)}">${escapeHtml(name)}</span>${sub ? `<span class="rule-meta">${escapeHtml(sub)}</span>` : ""}`;
-}
-
-function bdrPerson(m) {
-  if (m.meetingType === "handoff") return m.bookerUser ?? m.assignedUser;
-  return m.assignedUser ?? m.bookerUser;
-}
-
-function aePerson(m) {
-  return m.hostUser;
-}
-
-function renderTable() {
-  const rows = filteredMeetingsForTable();
-  const tbody = $("#meetingsBody");
-  tbody.innerHTML = rows
-    .map(
-      (m) => `
-    <tr>
-      <td class="date-cell">${formatBookedDate(m.bookedAt)}</td>
-      <td class="date-cell">${formatMeetingTime(m.meetingStartTime ?? m.meetingAt)}</td>
-      <td>${escapeHtml(m.company || m.title) || "—"}</td>
-      <td class="sf-cell">${formatSalesforceLink(m)}</td>
-      <td><span class="type-tag type-${escapeHtml(m.meetingType)}">${escapeHtml(meetingTypeShort(m.meetingType))}</span></td>
-      <td>${escapeHtml(m.region) || "—"}</td>
-      <td class="rule-cell">${formatRoutingRule(m)}</td>
-      <td class="person-cell">${formatPerson(bdrPerson(m))}</td>
-      <td class="person-cell">${formatPerson(aePerson(m))}</td>
-      <td>${statusPill(m)}</td>
-    </tr>
-  `,
-    )
-    .join("");
-  $("#emptyState").hidden = rows.length > 0;
+function renderAll() {
+  refreshFilterOptions();
+  updateFilterSummary();
+  renderKpis();
+  renderReports();
+  const onReportTab = REPORT_TABS.has(activeTab);
+  document.querySelector(".chart-panel.card")?.toggleAttribute("hidden", onReportTab);
+  document.querySelector("#ruleAssigneeSection")?.toggleAttribute("hidden", onReportTab || !filters.routingRuleId);
+  document.querySelector(".table-section.card")?.toggleAttribute("hidden", onReportTab && activeTab !== "all");
+  if (!onReportTab) {
+    renderPeriodChart();
+    renderRuleAssigneeBreakdown();
+    renderTable();
+  }
+  updatePeriodLine();
 }
 
 function setTab(tab) {
@@ -1020,214 +562,77 @@ function setTab(tab) {
   renderAll();
 }
 
-function renderStatusExportNote() {
-  const el = $("#statusExportNote");
-  if (!el || !data?.meetings?.length) return;
-
-  const all = data.meetings;
-  const exportHeld = all.filter((m) => m.happened && !m.heldInferred).length;
-  const inferredHeld = all.filter((m) => m.heldInferred).length;
-  const noShow = all.filter((m) => m.noShow).length;
-  const scheduled = all.filter((m) => m.outcome === "scheduled").length;
-
-  if (!inferredHeld) {
-    el.hidden = true;
-    return;
-  }
-
-  el.hidden = false;
-  el.textContent = `Held: ${exportHeld.toLocaleString()} from Chili Piper · ${inferredHeld.toLocaleString()} inferred from past meeting end time · ${noShow.toLocaleString()} no-show · ${scheduled.toLocaleString()} scheduled`;
-}
-
-function renderMeta(meetingsMeta) {
+function renderMeta() {
   const parts = [];
   const rowCount = data?.meetings?.length ?? data?.meta?.meetingRows;
-  if (rowCount != null) {
-    parts.push(`${Number(rowCount).toLocaleString()} meetings in file`);
-  }
-  const src = data?.meta?.source ?? meetingsMeta?.source;
-  if (src === "chilipiper-export") {
-    parts.push("Chili Piper export");
-  } else if (src === "google-sheets") {
-    parts.push("Google Sheet");
-  } else if (src === "csv") {
-    parts.push("CSV files");
-  }
-  if (data?.meta?.fetchedAt) {
-    parts.push(`Updated ${new Date(data.meta.fetchedAt).toLocaleString()}`);
-  }
-  $("#metaLine").textContent = parts.join(" · ") || "Sales meetings";
-  renderStatusExportNote();
-
-  const sheetId = meetingsMeta?.spreadsheetId ?? data?.meta?.spreadsheetId;
-  const link = $("#sheetLink");
-  if (sheetId) {
-    link.href = `https://docs.google.com/spreadsheets/d/${sheetId}/edit`;
-    link.hidden = false;
-  } else {
-    link.hidden = true;
-  }
-
-  const hint = $("#setupHint");
-  if (meetingsMeta?.lastError) {
-    hint.hidden = false;
-    hint.textContent = `Could not load meetings: ${meetingsMeta.lastError}. Set MEETINGS_SPREADSHEET_ID and tab GIDs in .env, or use sample CSVs.`;
-  } else if (src === "csv") {
-    hint.hidden = false;
-    hint.textContent =
-      "Using sample CSV data. Point MEETINGS_SPREADSHEET_ID at your live sheet (share: anyone with link can view) to go live.";
-  } else if (src === "chilipiper-export") {
-    hint.hidden = true;
-  } else {
-    hint.hidden = true;
-  }
-}
-
-async function loadRoutingKpi() {
-  if (data?.routingRules?.length) {
-    $("#kpiRouting").textContent = String(data.routingRules.length);
-    $("#kpiRoutingFoot").textContent = "From chilirules.json (static build)";
-    return;
-  }
-  try {
-    const res = await fetch("/api/routing");
-    if (!res.ok) return;
-    const routing = await res.json();
-    const count =
-      routing?.meta?.conciergeRuleCount ?? routing?.concierge?.rules?.length ?? "—";
-    $("#kpiRouting").textContent = String(count);
-    const src = routing?.meta?.source;
-    $("#kpiRoutingFoot").textContent =
-      src === "chilipiper-api" || src === "chilipiper-export"
-        ? src === "chilipiper-export"
-          ? "From chilirules.json"
-          : "From Chili Piper API"
-        : `Source: ${src ?? "routing"}`;
-  } catch {
-    /* optional */
-  }
+  if (rowCount != null) parts.push(`${Number(rowCount).toLocaleString()} submissions in file`);
+  if (data?.meta?.schema === "website-log") parts.push("Website concierge log");
+  else if (data?.meta?.source === "chilipiper-export") parts.push("Chili Piper export");
+  if (data?.meta?.fetchedAt) parts.push(`Updated ${new Date(data.meta.fetchedAt).toLocaleString()}`);
+  $("#metaLine").textContent = parts.join(" · ") || "Website meetings";
+  $("#setupHint").hidden = !data?.meta?.lastError;
+  if (data?.meta?.lastError) $("#setupHint").textContent = `Could not load data: ${data.meta.lastError}`;
 }
 
 async function loadStaticMeetingsJson(refresh = false) {
   let cacheKey = refresh ? String(Date.now()) : "";
   try {
-    const metaUrl = new URL("./site-meta.json", import.meta.url);
-    const metaRes = await fetch(metaUrl, { cache: "no-store" });
-    if (metaRes.ok) {
-      const siteMeta = await metaRes.json();
-      cacheKey = siteMeta.builtAt ?? cacheKey;
-    }
+    const metaRes = await fetch(new URL("./site-meta.json", import.meta.url), { cache: "no-store" });
+    if (metaRes.ok) cacheKey = (await metaRes.json()).builtAt ?? cacheKey;
   } catch {
-    /* site-meta optional for older builds */
+    /* optional */
   }
-
   const dataUrl = new URL("./meetings-data.json", import.meta.url);
   if (cacheKey) dataUrl.searchParams.set("v", cacheKey);
-
   const res = await fetch(dataUrl, { cache: "no-store" });
   if (!res.ok) {
     $("#metaLine").textContent = "Failed to load meetings data";
-    renderMeta({ lastError: `HTTP ${res.status}` });
+    renderMeta();
     return null;
   }
-
   return res.json();
 }
 
 async function loadMeetings(refresh = false) {
-  const q = refresh ? "?refresh=1" : "";
-  let meetingsMeta = {};
-
-  try {
-    const [meetingsRes, metaRes] = await Promise.all([
-      fetch(`/api/meetings${q}`, { cache: "no-store" }),
-      fetch("/api/meetings/meta", { cache: "no-store" }),
-    ]);
-    meetingsMeta = metaRes.ok ? await metaRes.json() : {};
-    if (meetingsRes.ok) {
-      data = await meetingsRes.json();
-      applyLoadedData(meetingsMeta);
-      return;
-    }
-  } catch {
-    /* no local server — use static JSON */
-  }
-
   const payload = await loadStaticMeetingsJson(refresh);
   if (!payload) return;
-
   data = payload;
-  meetingsMeta = { source: "chilipiper", staticSite: true };
-  applyLoadedData(meetingsMeta);
-
-  if (refresh && data?.staticSite) {
-    $("#setupHint").hidden = false;
-    $("#setupHint").textContent =
-      "Static site — run ./scripts/deploy-gh-pages.sh after updating Meeting_new.csv.";
-  }
-}
-
-function applyLoadedData(meetingsMeta) {
   filters.dateFrom = data?.filterOptions?.dateFrom ?? "";
   filters.dateTo = data?.filterOptions?.dateTo ?? "";
-  filters.repKey = "";
-  filters.routingRuleId = "";
-  filters.region = "";
-  filters.meetingType = "";
-
+  filters.repKey = filters.routingRuleId = filters.region = filters.websiteStatus = "";
   populateFilterControls();
   renderAll();
-  renderMeta(meetingsMeta);
+  renderMeta();
+  if (refresh) {
+    $("#setupHint").hidden = false;
+    $("#setupHint").textContent = "Refreshed from static JSON — rebuild after updating the CSV.";
+  }
 }
 
 function init() {
   $("#refreshBtn").addEventListener("click", () => loadMeetings(true));
-  $("#excludeCanceled")?.addEventListener("change", renderAll);
+  $("#bookedOnly")?.addEventListener("change", renderAll);
   $("#clearFiltersBtn").addEventListener("click", clearFilters);
-
-  for (const id of [
-    "filterDateFrom",
-    "filterDateTo",
-    "filterRep",
-    "filterRoutingRule",
-    "filterRegion",
-    "filterMeetingType",
+  for (const [id, key] of [
+    ["filterDateFrom", "dateFrom"],
+    ["filterDateTo", "dateTo"],
+    ["filterRep", "repKey"],
+    ["filterRoutingRule", "routingRuleId"],
+    ["filterRegion", "region"],
+    ["filterWebsiteStatus", "websiteStatus"],
   ]) {
     $(`#${id}`).addEventListener("change", (e) => {
-      const key =
-        id === "filterDateFrom"
-          ? "dateFrom"
-          : id === "filterDateTo"
-            ? "dateTo"
-            : id === "filterRep"
-              ? "repKey"
-              : id === "filterRegion"
-                ? "region"
-                : id === "filterMeetingType"
-                  ? "meetingType"
-                  : "routingRuleId";
       filters[key] = e.target.value;
       syncFilterDates(key);
       syncRegionAndRuleFilters(id);
-      if (id === "filterMeetingType" && (e.target.value === "handoff" || e.target.value === "chilical")) {
-        filters.routingRuleId = "";
-        filters.region = "";
-        $("#filterRoutingRule").value = "";
-        $("#filterRegion").value = "";
-      }
       renderAll();
     });
   }
-
-  for (const tab of document.querySelectorAll(".tab")) {
-    tab.addEventListener("click", () => setTab(tab.dataset.tab));
-  }
-
+  for (const tab of document.querySelectorAll(".tab")) tab.addEventListener("click", () => setTab(tab.dataset.tab));
   $("#chartGranularity").addEventListener("change", (e) => {
     chartGranularity = e.target.value;
     renderPeriodChart();
   });
-
   loadMeetings();
 }
 
