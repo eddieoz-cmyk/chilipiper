@@ -373,8 +373,7 @@ function renderPeriodChart() {
 
   const granLabel =
     granularity === "month" ? "month" : granularity === "week" ? "week" : "day";
-  const dateLabel = "booking date";
-  let subtitle = `${total.toLocaleString()} meetings · by ${granLabel} · ${dateLabel}`;
+  let subtitle = `${total.toLocaleString()} meetings · stacked by ${granLabel}`;
   if (rangeFrom && rangeTo) {
     const fmt = (d) =>
       d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
@@ -384,39 +383,41 @@ function renderPeriodChart() {
 
   if (!buckets.length || total === 0) {
     svg.innerHTML = "";
+    svg.removeAttribute("aria-hidden");
     empty.hidden = false;
-    const n = meetings.length;
     empty.textContent =
-      n === 0
-        ? "No meetings match the current filters. Try clearing the routing rule when viewing handoffs or rep calendar meetings."
-        : "No chart data for the selected period.";
+      meetings.length === 0
+        ? "No meetings match the current filters. Try clearing the routing rule when viewing handoffs or rep calendar."
+        : "No bookings to chart for this period.";
     return;
   }
+
   empty.hidden = true;
+  svg.setAttribute("aria-hidden", "false");
 
   const w = 800;
-  const h = 280;
-  const padL = 44;
-  const padR = 12;
-  const padT = 12;
-  const padB = 52;
+  const h = 300;
+  const padL = 48;
+  const padR = 16;
+  const padT = 16;
+  const padB = 56;
   const chartW = w - padL - padR;
   const chartH = h - padT - padB;
   const maxVal = Math.max(...buckets.map((b) => b.total), 1);
   const n = buckets.length;
-  const gap = Math.min(4, chartW / n / 4);
-  const barW = Math.max(2, (chartW - gap * (n - 1)) / n);
+  const gap = n > 20 ? 2 : Math.min(4, chartW / n / 4);
+  const barW = Math.max(3, (chartW - gap * (n - 1)) / n);
+  const labelStep = n <= 12 ? 1 : n <= 24 ? 2 : Math.max(1, Math.ceil(n / 10));
 
-  const yTicks = Math.min(4, maxVal);
+  const yTicks = 4;
   let svgParts = [];
 
   for (let i = 0; i <= yTicks; i++) {
-    const val =
-      yTicks === 0 ? maxVal : Math.round((maxVal * (yTicks - i)) / yTicks);
+    const val = Math.round((maxVal * (yTicks - i)) / yTicks);
     const y = padT + (chartH * i) / yTicks;
     svgParts.push(`<line class="grid-line" x1="${padL}" y1="${y}" x2="${w - padR}" y2="${y}" />`);
     svgParts.push(
-      `<text class="axis-label" x="${padL - 8}" y="${y + 4}" text-anchor="end">${val}</text>`,
+      `<text class="axis-label" x="${padL - 10}" y="${y + 4}" text-anchor="end">${val}</text>`,
     );
   }
 
@@ -431,21 +432,22 @@ function renderPeriodChart() {
     let yTop = padT + chartH;
     for (const seg of segments) {
       if (!seg.n) continue;
-      const barH = (seg.n / maxVal) * chartH;
+      const barH = Math.max(1, (seg.n / maxVal) * chartH);
       yTop -= barH;
       const title = `${formatBucketLabel(b.key, granularity)}: ${seg.cls.replace("bar-", "")} ${seg.n}`;
       svgParts.push(
-        `<rect class="${seg.cls}" x="${x}" y="${yTop}" width="${barW}" height="${barH}" rx="1"><title>${escapeHtml(title)}</title></rect>`,
+        `<rect class="${seg.cls}" x="${x}" y="${yTop}" width="${barW}" height="${barH}" rx="2"><title>${escapeHtml(title)}</title></rect>`,
       );
     }
-    if (n <= 40 || i % Math.ceil(n / 20) === 0 || i === n - 1) {
+    if (i % labelStep === 0 || i === n - 1) {
       const label = formatBucketLabel(b.key, granularity);
       svgParts.push(
-        `<text class="axis-label" x="${x + barW / 2}" y="${h - 12}" text-anchor="middle">${escapeHtml(label)}</text>`,
+        `<text class="axis-label axis-label-x" x="${x + barW / 2}" y="${h - 14}" text-anchor="middle">${escapeHtml(label)}</text>`,
       );
     }
   });
 
+  svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.innerHTML = svgParts.join("");
 }
 
