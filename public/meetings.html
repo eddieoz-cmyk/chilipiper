@@ -33,32 +33,32 @@
         </div>
 
         <div class="kpi-row" id="kpiRow">
-          <div class="kpi-card accent">
+          <div class="kpi-card accent" data-kpi="total">
             <span class="kpi-label">Meetings booked</span>
             <span class="kpi-value" id="kpiCalendarTotal">—</span>
             <span class="kpi-foot" id="kpiCalendarFoot">In selected period</span>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-kpi="concierge">
             <span class="kpi-label">Website inbound</span>
             <span class="kpi-value" id="kpiConciergeCalendar">—</span>
             <span class="kpi-foot" id="kpiConciergeCalendarFoot">Prospect booked on website</span>
           </div>
-          <div class="kpi-card warning">
+          <div class="kpi-card warning" data-kpi="handoff">
             <span class="kpi-label">BDR → AE handoffs</span>
             <span class="kpi-value" id="kpiHandoff">—</span>
             <span class="kpi-foot" id="kpiHandoffFoot">Passed from BDR to AE</span>
           </div>
-          <div class="kpi-card">
+          <div class="kpi-card" data-kpi="chilical">
             <span class="kpi-label">Rep calendar</span>
             <span class="kpi-value" id="kpiChilical">—</span>
             <span class="kpi-foot" id="kpiChilicalFoot">Direct Chili Piper link</span>
           </div>
-          <div class="kpi-card success">
+          <div class="kpi-card success" data-kpi="status">
             <span class="kpi-label">Upcoming</span>
             <span class="kpi-value" id="kpiScheduled">—</span>
             <span class="kpi-foot" id="kpiScheduledFoot">Still on calendar</span>
           </div>
-          <div class="kpi-card danger">
+          <div class="kpi-card danger" data-kpi="status">
             <span class="kpi-label">No-show</span>
             <span class="kpi-value" id="kpiNoShow">—</span>
             <span class="kpi-foot" id="kpiNoShowFoot">Did not attend</span>
@@ -109,7 +109,7 @@
           </label>
         </div>
         <p class="filter-hint" id="filterHint">
-          Date and rep apply to all sources. Region and routing rule apply to <strong>website inbound only</strong> — handoffs and rep calendar are never dropped by those filters.
+          Pick a meeting source to focus one channel, or leave on “All sources” for the full picture.
         </p>
         <p class="filter-summary" id="filterSummary" hidden></p>
       </section>
@@ -149,11 +149,10 @@
       </section>
 
       <section class="rule-assignees card" id="ruleAssigneeSection" hidden aria-labelledby="ruleAssigneeHeading">
-        <h2 id="ruleAssigneeHeading" class="section-title">Rep breakdown for selected rule</h2>
+        <h2 id="ruleAssigneeHeading" class="section-title">Rep breakdown for website filter</h2>
         <p class="chart-subtitle" id="ruleAssigneeSubtitle">—</p>
         <p class="panel-hint">
-          Website = inbound on this routing rule. Handoff &amp; rep calendar = same date/rep filters but not linked to a
-          routing rule in Chili Piper.
+          Only reps who received a website meeting on this region or routing rule. Their handoffs and rep calendar meetings in the same period are included.
         </p>
         <div class="table-wrap">
           <table class="assignee-table">

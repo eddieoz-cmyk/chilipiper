@@ -1,8 +1,10 @@
 import {
   applyMeetingFilters as applyFilters,
+  buildRepsFromMeetings,
   computeMeetingsReports,
   primaryRepKey,
   primaryRepName,
+  websiteFilterActive,
 } from "./meetings-report-logic.mjs";
 import {
   formatBookedDate,
@@ -166,6 +168,9 @@ function updateFilterSummary() {
   }
   if (filters.region) parts.push(`website region: ${filters.region}`);
   if (filters.meetingType) parts.push(`source: ${meetingTypeLabel(filters.meetingType)}`);
+  if (websiteFilterActive(filters) && !filters.meetingType) {
+    parts.push("handoffs/rep calendar limited to reps on this website route");
+  }
   if (filters.dateFrom || filters.dateTo) {
     parts.push(formatPeriodLabel(filters.dateFrom, filters.dateTo));
   }
@@ -188,9 +193,93 @@ function updateFilterControlState() {
 
   if (hint) {
     hint.hidden = false;
-    hint.innerHTML = websiteOnlySource
-      ? "Region and routing rule are disabled for handoffs and rep calendar — those rows have no website routing data. Use <strong>date</strong> and <strong>rep</strong> instead."
-      : "Date and rep apply to all sources. Region and routing rule apply to <strong>website inbound only</strong> — handoffs and rep calendar stay in view when those filters are set.";
+    if (websiteOnlySource) {
+      hint.innerHTML =
+        "Region and routing rule only apply to <strong>website inbound</strong>. For handoffs or rep calendar, use <strong>date</strong> and <strong>rep</strong>.";
+    } else if (websiteFilterActive(filters) && !filters.meetingType) {
+      hint.innerHTML =
+        "Website rows match the region / routing rule. Handoffs and rep calendar include only reps who received a matching website meeting in this period.";
+    } else if (filters.meetingType === "concierge") {
+      hint.innerHTML = "Showing <strong>website inbound only</strong>. Switch source to “All sources” to include handoffs and rep calendar.";
+    } else {
+      hint.innerHTML =
+        "Pick a meeting source to focus one channel, or leave on “All sources” for the full picture.";
+    }
+  }
+}
+
+function refreshFilterOptions() {
+  const opts = data?.filterOptions;
+  if (!opts) return;
+
+  const contextMeetings = applyMeetingFilters(data?.meetings ?? [], { ...filters, repKey: "" });
+  const availableReps = buildRepsFromMeetings(contextMeetings);
+
+  const repSel = $("#filterRep");
+  const prevRep = filters.repKey;
+  repSel.innerHTML =
+    `<option value="">All reps${availableReps.length ? ` (${availableReps.length} in view)` : ""}</option>` +
+    availableReps
+      .map((r) => {
+        const label = r.name ?? r.key.replace(/^id:|^email:/, "");
+        return `<option value="${escapeHtml(r.key)}">${escapeHtml(label)}</option>`;
+      })
+      .join("");
+  if (prevRep && availableReps.some((r) => r.key === prevRep)) {
+    repSel.value = prevRep;
+  } else {
+    filters.repKey = "";
+    repSel.value = "";
+  }
+
+  let rules = opts.routingRules ?? [];
+  if (filters.region) {
+    rules = rules.filter((r) => (r.region ?? "") === filters.region);
+  }
+
+  const ruleSel = $("#filterRoutingRule");
+  const byRegion = new Map();
+  for (const rule of rules) {
+    const region = rule.region ?? "Other";
+    if (!byRegion.has(region)) byRegion.set(region, []);
+    byRegion.get(region).push(rule);
+  }
+
+  let rulesHtml = `<option value="">All routing rules (${rules.length} in view)</option>`;
+  for (const region of [...byRegion.keys()].sort((a, b) => a.localeCompare(b))) {
+    const group = byRegion.get(region);
+    rulesHtml += `<optgroup label="${escapeHtml(region)}">`;
+    for (const rule of group) {
+      rulesHtml += `<option value="${escapeHtml(rule.id)}">${escapeHtml(rule.name)}</option>`;
+    }
+    rulesHtml += `</optgroup>`;
+  }
+  ruleSel.innerHTML = rulesHtml;
+  if (filters.routingRuleId && rules.some((r) => r.id === filters.routingRuleId)) {
+    ruleSel.value = filters.routingRuleId;
+  } else {
+    filters.routingRuleId = "";
+    ruleSel.value = "";
+  }
+}
+
+function syncRegionAndRuleFilters(changedId) {
+  const opts = data?.filterOptions;
+  if (!opts) return;
+
+  if (changedId === "filterRegion" && filters.routingRuleId) {
+    const rule = opts.routingRules?.find((r) => r.id === filters.routingRuleId);
+    if (rule?.region && filters.region && rule.region !== filters.region) {
+      filters.routingRuleId = "";
+    }
+  }
+
+  if (changedId === "filterRoutingRule" && filters.routingRuleId) {
+    const rule = opts.routingRules?.find((r) => r.id === filters.routingRuleId);
+    if (rule?.region) {
+      filters.region = rule.region;
+      $("#filterRegion").value = rule.region;
+    }
   }
 }
 
@@ -204,6 +293,12 @@ function syncFilterDates(changedKey) {
 }
 
 function populateFilterControls() {
+  populateStaticFilterControls();
+  refreshFilterOptions();
+  updateFilterControlState();
+}
+
+function populateStaticFilterControls() {
   const opts = data?.filterOptions;
   if (!opts) return;
 
@@ -219,8 +314,7 @@ function populateFilterControls() {
   }
   if (opts.dateRangeMin) $("#filterDateTo").min = opts.dateRangeMin;
 
-  const typeSel = $("#filterMeetingType");
-  typeSel.value = filters.meetingType;
+  $("#filterMeetingType").value = filters.meetingType;
 
   const regionSel = $("#filterRegion");
   regionSel.innerHTML =
@@ -229,39 +323,6 @@ function populateFilterControls() {
       .map((r) => `<option value="${escapeHtml(r)}">${escapeHtml(r)}</option>`)
       .join("");
   regionSel.value = filters.region;
-
-  const repSel = $("#filterRep");
-  repSel.innerHTML =
-    `<option value="">All reps</option>` +
-    (opts.reps ?? [])
-      .map((r) => {
-        const label = r.name ?? r.key.replace(/^id:|^email:/, "");
-        return `<option value="${escapeHtml(r.key)}">${escapeHtml(label)}</option>`;
-      })
-      .join("");
-  repSel.value = filters.repKey;
-
-  const ruleSel = $("#filterRoutingRule");
-  const rules = opts.routingRules ?? [];
-  const byRegion = new Map();
-  for (const rule of rules) {
-    const region = rule.region ?? "Other";
-    if (!byRegion.has(region)) byRegion.set(region, []);
-    byRegion.get(region).push(rule);
-  }
-
-  let rulesHtml = `<option value="">All routing rules (${rules.length} used in meetings)</option>`;
-  for (const region of [...byRegion.keys()].sort((a, b) => a.localeCompare(b))) {
-    const group = byRegion.get(region);
-    rulesHtml += `<optgroup label="${escapeHtml(region)}">`;
-    for (const rule of group) {
-      rulesHtml += `<option value="${escapeHtml(rule.id)}">${escapeHtml(rule.name)}</option>`;
-    }
-    rulesHtml += `</optgroup>`;
-  }
-  ruleSel.innerHTML = rulesHtml;
-  ruleSel.value = filters.routingRuleId;
-  updateFilterControlState();
 }
 
 function clearFilters() {
@@ -504,7 +565,8 @@ function repDisplayForMeeting(m) {
 
 function renderRuleAssigneeBreakdown() {
   const section = $("#ruleAssigneeSection");
-  if (!filters.routingRuleId) {
+  const websiteScope = websiteFilterActive(filters);
+  if (!websiteScope) {
     section.hidden = true;
     return;
   }
@@ -519,13 +581,13 @@ function renderRuleAssigneeBreakdown() {
   const chilicalRows = filtered.filter((m) => m.meetingType === "chilical");
 
   section.hidden = false;
-  $("#ruleAssigneeHeading").textContent = "Rep breakdown for selected rule";
+  const scopeLabel = rule?.name ?? (filters.region ? `${filters.region} website` : "selected website route");
+  $("#ruleAssigneeHeading").textContent = "Rep breakdown for website filter";
   const websiteTotal = websiteRows.length;
   const handoffTotal = handoffRows.length;
   const chilicalTotal = chilicalRows.length;
-  $("#ruleAssigneeSubtitle").textContent = rule?.name
-    ? `${websiteTotal.toLocaleString()} website on “${rule.name}” · ${handoffTotal.toLocaleString()} handoffs · ${chilicalTotal.toLocaleString()} rep calendar in the same period`
-    : `${websiteTotal.toLocaleString()} website meetings for selected rule`;
+  $("#ruleAssigneeSubtitle").textContent =
+    `${websiteTotal.toLocaleString()} website on ${scopeLabel} · ${handoffTotal.toLocaleString()} handoffs · ${chilicalTotal.toLocaleString()} rep calendar for the same reps`;
 
   const byRep = new Map();
 
@@ -749,9 +811,20 @@ function renderReports() {
   renderHandoffsReport(reports);
 }
 
+function updateKpiHighlight() {
+  const row = $("#kpiRow");
+  if (!row) return;
+  row.classList.remove("kpi-focus-concierge", "kpi-focus-handoff", "kpi-focus-chilical");
+  if (filters.meetingType === "concierge") row.classList.add("kpi-focus-concierge");
+  if (filters.meetingType === "handoff") row.classList.add("kpi-focus-handoff");
+  if (filters.meetingType === "chilical") row.classList.add("kpi-focus-chilical");
+}
+
 function renderAll() {
+  refreshFilterOptions();
   updateFilterSummary();
   updateFilterControlState();
+  updateKpiHighlight();
   renderKpis();
   renderReports();
   const onReportTab = REPORT_TABS.has(activeTab);
@@ -759,7 +832,10 @@ function renderAll() {
   document.querySelector(".chart-panel.card")?.toggleAttribute("hidden", hideOverview);
   document.querySelector("#breakdownHeading")?.closest(".card")?.toggleAttribute("hidden", hideOverview);
   document.querySelector(".table-section.card")?.toggleAttribute("hidden", hideOverview && activeTab !== "all");
-  document.querySelector("#ruleAssigneeSection")?.toggleAttribute("hidden", hideOverview || !filters.routingRuleId);
+  document.querySelector("#ruleAssigneeSection")?.toggleAttribute(
+    "hidden",
+    hideOverview || !websiteFilterActive(filters) || Boolean(filters.meetingType),
+  );
   if (!hideOverview) {
     renderPeriodChart();
     renderRuleAssigneeBreakdown();
@@ -824,6 +900,7 @@ function renderBreakdown() {
     .map(({ key, title }) => {
       const s = m.byType[key];
       if (!s) return "";
+      if (filters.meetingType && filters.meetingType !== key) return "";
       return `
         <article class="breakdown-card">
           <h3>${escapeHtml(title)}</h3>
@@ -1093,6 +1170,7 @@ function init() {
                   : "routingRuleId";
       filters[key] = e.target.value;
       syncFilterDates(key);
+      syncRegionAndRuleFilters(id);
       if (id === "filterMeetingType" && (e.target.value === "handoff" || e.target.value === "chilical")) {
         filters.routingRuleId = "";
         filters.region = "";

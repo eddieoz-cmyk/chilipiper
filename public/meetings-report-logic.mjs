@@ -50,40 +50,98 @@ export function primaryRepName(m) {
   return person?.name ?? "Unknown";
 }
 
-/** Region and routing rule exist only on website inbound rows in this export. */
-function applyWebsiteOnlyFilters(rows, filters) {
-  const { routingRuleId, region, meetingType } = filters;
-  const hasWebsiteFilter = Boolean(routingRuleId || region);
-  if (!hasWebsiteFilter) return rows;
-  if (meetingType === "handoff" || meetingType === "chilical") return rows;
+export function websiteFilterActive(filters) {
+  return Boolean(filters?.routingRuleId || filters?.region);
+}
+
+function applyDateFilter(rows, filters) {
+  const from = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : null;
+  const to = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59.999Z`) : null;
+  const dateField = filters.dateField ?? "bookedAt";
+  if (!from && !to) return rows;
 
   return rows.filter((m) => {
-    if (m.meetingType !== "concierge") return true;
-    if (routingRuleId && m.routingRuleId !== routingRuleId) return false;
-    if (region && m.region !== region) return false;
+    const d = meetingDate(m, dateField);
+    if (!d) return false;
+    if (from && d < from) return false;
+    if (to && d > to) return false;
     return true;
   });
 }
 
-export function applyMeetingFilters(meetings, filters) {
-  let rows = meetings ?? [];
-  const from = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : null;
-  const to = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59.999Z`) : null;
-  const dateField = filters.dateField ?? "bookedAt";
+function matchesConciergeWebsiteFilter(m, filters) {
+  if (m.meetingType !== "concierge") return false;
+  if (filters.routingRuleId && m.routingRuleId !== filters.routingRuleId) return false;
+  if (filters.region && m.region !== filters.region) return false;
+  return true;
+}
 
-  if (from || to) {
-    rows = rows.filter((m) => {
-      const d = meetingDate(m, dateField);
-      if (!d) return false;
-      if (from && d < from) return false;
-      if (to && d > to) return false;
-      return true;
+/** Reps assigned on website rows matching the active region / routing rule (same date window). */
+export function buildWebsiteScopeRepKeys(meetings, filters) {
+  if (!websiteFilterActive(filters)) return null;
+  const dated = applyDateFilter(meetings ?? [], filters);
+  const keys = new Set();
+  for (const m of dated) {
+    if (!matchesConciergeWebsiteFilter(m, filters)) continue;
+    const pk = primaryRepKey(m);
+    if (pk !== "unknown") keys.add(pk);
+  }
+  return keys;
+}
+
+/** Reps visible in the current filter context (for rep dropdown). */
+export function buildRepsFromMeetings(meetings) {
+  const reps = new Map();
+
+  function addPerson(key, person) {
+    if (!key || key === "unknown" || reps.has(key)) return;
+    reps.set(key, {
+      key,
+      id: person?.id ?? (key.startsWith("id:") ? key.slice(3) : null),
+      name: person?.name ?? key.replace(/^id:|^email:/, ""),
+      email: person?.email ?? null,
     });
   }
 
-  if (filters.meetingType) rows = rows.filter((m) => m.meetingType === filters.meetingType);
-  if (filters.repKey) rows = rows.filter((m) => meetingMatchesRep(m, filters.repKey));
-  rows = applyWebsiteOnlyFilters(rows, filters);
+  for (const m of meetings ?? []) {
+    if (m.assignedUser?.id) addPerson(`id:${m.assignedUser.id}`, m.assignedUser);
+    if (m.bookerUser?.id) addPerson(`id:${m.bookerUser.id}`, m.bookerUser);
+    if (m.hostUser?.id) addPerson(`id:${m.hostUser.id}`, m.hostUser);
+    const pk = primaryRepKey(m);
+    if (pk !== "unknown") addPerson(pk, primaryRepPerson(m));
+  }
+
+  return [...reps.values()].sort((a, b) => (a.name ?? a.key).localeCompare(b.name ?? b.key));
+}
+
+export function applyMeetingFilters(meetings, filters) {
+  let rows = applyDateFilter(meetings ?? [], filters);
+  const websiteActive = websiteFilterActive(filters);
+  const skipWebsiteScope =
+    filters.meetingType === "handoff" || filters.meetingType === "chilical";
+  const scopeKeys =
+    websiteActive && !skipWebsiteScope
+      ? buildWebsiteScopeRepKeys(meetings ?? [], filters)
+      : null;
+
+  if (filters.meetingType) {
+    rows = rows.filter((m) => m.meetingType === filters.meetingType);
+  }
+
+  if (websiteActive && !skipWebsiteScope) {
+    rows = rows.filter((m) => {
+      if (m.meetingType === "concierge") {
+        return matchesConciergeWebsiteFilter(m, filters);
+      }
+      if (filters.meetingType === "concierge") return false;
+      if (!scopeKeys?.size) return false;
+      return scopeKeys.has(primaryRepKey(m));
+    });
+  }
+
+  if (filters.repKey) {
+    rows = rows.filter((m) => meetingMatchesRep(m, filters.repKey));
+  }
 
   return rows;
 }

@@ -785,6 +785,18 @@
   border-color: #ffa39e;
 }
 
+.kpi-row.kpi-focus-concierge .kpi-card:not([data-kpi="total"]):not([data-kpi="concierge"]):not([data-kpi="status"]) {
+  opacity: 0.4;
+}
+
+.kpi-row.kpi-focus-handoff .kpi-card:not([data-kpi="total"]):not([data-kpi="handoff"]):not([data-kpi="status"]) {
+  opacity: 0.4;
+}
+
+.kpi-row.kpi-focus-chilical .kpi-card:not([data-kpi="total"]):not([data-kpi="chilical"]):not([data-kpi="status"]) {
+  opacity: 0.4;
+}
+
 .report-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
