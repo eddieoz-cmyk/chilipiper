@@ -32,6 +32,27 @@ export function meetingMatchesRep(m, repKey) {
   return repKeysForMeeting(m).includes(repKey);
 }
 
+/** BDR / owning rep for dashboards — handoffs credit the BDR, not the AE host. */
+export function primaryRepPerson(m) {
+  if (m.meetingType === "handoff") return m.bookerUser ?? null;
+  if (m.meetingType === "concierge") return m.assignedUser ?? null;
+  if (m.meetingType === "chilical") return m.hostUser ?? m.bookerUser ?? null;
+  return m.assignedUser ?? m.hostUser ?? m.bookerUser ?? null;
+}
+
+export function primaryRepKey(m) {
+  const person = primaryRepPerson(m);
+  if (person?.id) return `id:${person.id}`;
+  if (person?.email) return `email:${person.email}`;
+  if (m.meetingType === "handoff" && m.bdr) return `email:${m.bdr}`;
+  return "unknown";
+}
+
+export function primaryRepName(m) {
+  const person = primaryRepPerson(m);
+  return person?.name ?? "Unknown";
+}
+
 export function applyMeetingFilters(meetings, filters) {
   let rows = meetings ?? [];
   const from = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : null;
@@ -118,7 +139,7 @@ export function computeRuleBdrDistribution(meetings) {
     const rule = byRule.get(ruleKey);
     rule.total++;
 
-    const bdrPerson = m.assignedUser ?? m.bookerUser;
+    const bdrPerson = primaryRepPerson(m) ?? m.bookerUser;
     const bdrKey = bdrPerson?.id ? `id:${bdrPerson.id}` : bdrPerson?.email ? `email:${bdrPerson.email}` : "unknown";
     if (!rule.bdrs.has(bdrKey)) {
       rule.bdrs.set(bdrKey, {

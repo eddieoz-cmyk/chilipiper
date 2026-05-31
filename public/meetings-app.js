@@ -1,6 +1,8 @@
 import {
   applyMeetingFilters as applyFilters,
   computeMeetingsReports,
+  primaryRepKey,
+  primaryRepName,
 } from "./meetings-report-logic.mjs";
 import {
   formatBookedDate,
@@ -102,8 +104,8 @@ function filtersActive() {
   );
 }
 
-function applyMeetingFilters(meetings) {
-  return applyFilters(meetings, filters);
+function applyMeetingFilters(meetings, overrideFilters) {
+  return applyFilters(meetings, overrideFilters ?? filters);
 }
 
 function getFilteredMeetings() {
@@ -439,14 +441,11 @@ function renderPeriodChart() {
 }
 
 function repKeyForMeeting(m) {
-  const person = m.assignedUser ?? m.hostUser ?? m.bookerUser;
-  if (person?.id) return `id:${person.id}`;
-  return "unknown";
+  return primaryRepKey(m);
 }
 
 function repDisplayForMeeting(m) {
-  const person = m.assignedUser ?? m.hostUser ?? m.bookerUser;
-  return { name: person?.name ?? "Unknown" };
+  return { name: primaryRepName(m) };
 }
 
 function renderRuleAssigneeBreakdown() {
@@ -460,20 +459,29 @@ function renderRuleAssigneeBreakdown() {
     data?.filterOptions?.routingRules?.find((r) => r.id === filters.routingRuleId) ??
     data?.meetings?.find((m) => m.routingRuleId === filters.routingRuleId)?.routingRule;
 
-  const rows = applyMeetingFilters(data?.meetings ?? []);
+  const websiteRows = applyMeetingFilters(data?.meetings ?? []).filter(
+    (m) => m.meetingType === "concierge",
+  );
+  const periodFilters = { ...filters, routingRuleId: "" };
+  const handoffRows = applyMeetingFilters(data?.meetings ?? [], periodFilters).filter(
+    (m) => m.meetingType === "handoff",
+  );
+
   section.hidden = false;
-  $("#ruleAssigneeHeading").textContent = "Meetings by rep";
+  $("#ruleAssigneeHeading").textContent = "Rep breakdown for selected rule";
+  const websiteTotal = websiteRows.length;
+  const handoffTotal = handoffRows.length;
   $("#ruleAssigneeSubtitle").textContent = rule?.name
-    ? `${rows.length.toLocaleString()} meetings on “${rule.name}” in this period`
-    : `${rows.length.toLocaleString()} meetings for selected rule`;
+    ? `${websiteTotal.toLocaleString()} website meetings on “${rule.name}” · ${handoffTotal.toLocaleString()} BDR handoffs in the same period (handoffs are not tagged with a routing rule)`
+    : `${websiteTotal.toLocaleString()} website meetings for selected rule`;
 
   const byRep = new Map();
-  for (const m of rows) {
+
+  function ensureRep(m) {
     const key = repKeyForMeeting(m);
     if (!byRep.has(key)) {
-      const rep = repDisplayForMeeting(m);
       byRep.set(key, {
-        name: rep.name,
+        name: repDisplayForMeeting(m).name,
         total: 0,
         concierge: 0,
         chilical: 0,
@@ -482,13 +490,23 @@ function renderRuleAssigneeBreakdown() {
         canceled: 0,
       });
     }
-    const r = byRep.get(key);
+    return byRep.get(key);
+  }
+
+  for (const m of websiteRows) {
+    const r = ensureRep(m);
     r.total++;
+    r.concierge++;
     if (m.isScheduled) r.scheduled++;
     if (m.canceled) r.canceled++;
-    if (m.meetingType === "concierge") r.concierge++;
-    else if (m.meetingType === "handoff") r.handoff++;
-    else if (m.meetingType === "chilical") r.chilical++;
+  }
+
+  for (const m of handoffRows) {
+    const r = ensureRep(m);
+    r.total++;
+    r.handoff++;
+    if (m.isScheduled) r.scheduled++;
+    if (m.canceled) r.canceled++;
   }
 
   const sorted = [...byRep.values()].sort((a, b) => b.total - a.total);
