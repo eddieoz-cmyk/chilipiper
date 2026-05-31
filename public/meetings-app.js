@@ -111,7 +111,7 @@ function applyMeetingFilters(meetings, overrideFilters) {
 function getFilteredMeetings() {
   let rows = applyMeetingFilters(data?.meetings ?? []);
   if ($("#excludeCanceled")?.checked) {
-    rows = rows.filter((m) => m.isScheduled);
+    rows = rows.filter((m) => !m.canceled && (m.isScheduled ?? m.status === "Active"));
   }
   return rows;
 }
@@ -307,6 +307,10 @@ function buildPeriodSeries(meetings) {
     if (d) dated.push({ m, d });
   }
 
+  if (!dated.length) {
+    return { buckets: [], granularity: "day", total: 0, rangeFrom: null, rangeTo: null };
+  }
+
   let rangeFrom = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : null;
   let rangeTo = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59.999Z`) : null;
 
@@ -381,6 +385,11 @@ function renderPeriodChart() {
   if (!buckets.length || total === 0) {
     svg.innerHTML = "";
     empty.hidden = false;
+    const n = meetings.length;
+    empty.textContent =
+      n === 0
+        ? "No meetings match the current filters. Try clearing the routing rule when viewing handoffs or rep calendar meetings."
+        : "No chart data for the selected period.";
     return;
   }
   empty.hidden = true;
@@ -466,13 +475,17 @@ function renderRuleAssigneeBreakdown() {
   const handoffRows = applyMeetingFilters(data?.meetings ?? [], periodFilters).filter(
     (m) => m.meetingType === "handoff",
   );
+  const chilicalRows = applyMeetingFilters(data?.meetings ?? [], periodFilters).filter(
+    (m) => m.meetingType === "chilical",
+  );
 
   section.hidden = false;
   $("#ruleAssigneeHeading").textContent = "Rep breakdown for selected rule";
   const websiteTotal = websiteRows.length;
   const handoffTotal = handoffRows.length;
+  const chilicalTotal = chilicalRows.length;
   $("#ruleAssigneeSubtitle").textContent = rule?.name
-    ? `${websiteTotal.toLocaleString()} website meetings on “${rule.name}” · ${handoffTotal.toLocaleString()} BDR handoffs in the same period (handoffs are not tagged with a routing rule)`
+    ? `${websiteTotal.toLocaleString()} website on “${rule.name}” · ${handoffTotal.toLocaleString()} handoffs · ${chilicalTotal.toLocaleString()} rep calendar in the same period`
     : `${websiteTotal.toLocaleString()} website meetings for selected rule`;
 
   const byRep = new Map();
@@ -505,6 +518,14 @@ function renderRuleAssigneeBreakdown() {
     const r = ensureRep(m);
     r.total++;
     r.handoff++;
+    if (m.isScheduled) r.scheduled++;
+    if (m.canceled) r.canceled++;
+  }
+
+  for (const m of chilicalRows) {
+    const r = ensureRep(m);
+    r.total++;
+    r.chilical++;
     if (m.isScheduled) r.scheduled++;
     if (m.canceled) r.canceled++;
   }
@@ -1014,6 +1035,10 @@ function init() {
                   ? "meetingType"
                   : "routingRuleId";
       filters[key] = e.target.value;
+      if (id === "filterMeetingType" && (e.target.value === "handoff" || e.target.value === "chilical")) {
+        filters.routingRuleId = "";
+        $("#filterRoutingRule").value = "";
+      }
       renderAll();
     });
   }

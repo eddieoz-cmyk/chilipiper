@@ -15,16 +15,14 @@ export function meetingDate(m, dateField = "bookedAt") {
 }
 
 export function repKeysForMeeting(m) {
-  const keys = [];
-  if (m.assignedUserId) keys.push(`id:${m.assignedUserId}`);
-  if (m.assignedUser?.email) keys.push(`email:${m.assignedUser.email}`);
-  if (m.hostUser?.id) keys.push(`id:${m.hostUser.id}`);
-  if (m.hostUser?.email) keys.push(`email:${m.hostUser.email}`);
-  if (m.bookerUser?.id) keys.push(`id:${m.bookerUser.id}`);
-  if (m.bookerUser?.email) keys.push(`email:${m.bookerUser.email}`);
-  if (m.ae) keys.push(`email:${m.ae}`);
-  if (m.bdr) keys.push(`email:${m.bdr}`);
-  return keys;
+  const keys = new Set();
+  if (m.assignedUserId) keys.add(`id:${m.assignedUserId}`);
+  if (m.assignedUser?.id) keys.add(`id:${m.assignedUser.id}`);
+  if (m.hostUser?.id) keys.add(`id:${m.hostUser.id}`);
+  if (m.bookerUser?.id) keys.add(`id:${m.bookerUser.id}`);
+  const primary = primaryRepKey(m);
+  if (primary !== "unknown") keys.add(primary);
+  return [...keys];
 }
 
 export function meetingMatchesRep(m, repKey) {
@@ -44,7 +42,6 @@ export function primaryRepKey(m) {
   const person = primaryRepPerson(m);
   if (person?.id) return `id:${person.id}`;
   if (person?.email) return `email:${person.email}`;
-  if (m.meetingType === "handoff" && m.bdr) return `email:${m.bdr}`;
   return "unknown";
 }
 
@@ -53,11 +50,18 @@ export function primaryRepName(m) {
   return person?.name ?? "Unknown";
 }
 
+/** Routing rules only exist on website inbound rows in this export. */
+function applyRoutingRuleFilter(rows, routingRuleId, meetingType) {
+  if (!routingRuleId) return rows;
+  if (meetingType === "handoff" || meetingType === "chilical") return rows;
+  return rows.filter((m) => m.routingRuleId === routingRuleId);
+}
+
 export function applyMeetingFilters(meetings, filters) {
   let rows = meetings ?? [];
   const from = filters.dateFrom ? new Date(`${filters.dateFrom}T00:00:00.000Z`) : null;
   const to = filters.dateTo ? new Date(`${filters.dateTo}T23:59:59.999Z`) : null;
-  const dateField = filters.dateField ?? "meetingAt";
+  const dateField = filters.dateField ?? "bookedAt";
 
   if (from || to) {
     rows = rows.filter((m) => {
@@ -70,7 +74,7 @@ export function applyMeetingFilters(meetings, filters) {
   }
 
   if (filters.region) rows = rows.filter((m) => m.region === filters.region);
-  if (filters.routingRuleId) rows = rows.filter((m) => m.routingRuleId === filters.routingRuleId);
+  rows = applyRoutingRuleFilter(rows, filters.routingRuleId, filters.meetingType);
   if (filters.meetingType) rows = rows.filter((m) => m.meetingType === filters.meetingType);
   if (filters.repKey) rows = rows.filter((m) => meetingMatchesRep(m, filters.repKey));
 
